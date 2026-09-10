@@ -14,15 +14,18 @@ import {
   Clipboard,
   Code,
   Copy,
+  Download,
   FileCheck2,
   FileJson,
   FileUp,
+  FolderOpen,
   Fingerprint,
   GitBranch,
   Image as ImageIcon,
   Info,
   KeyRound,
   Layers3,
+  List,
   Lock,
   LockKeyhole,
   Maximize,
@@ -46,7 +49,7 @@ import './styles.css';
 const ACCEPTED_TYPES = 'image/*,video/mp4,video/quicktime,audio/*';
 const SAMPLE_NAME = 'alpine_dawn_capture_2025.jpg';
 
-type View = 'inspector' | 'lineage' | 'evidence' | 'settings';
+type View = 'inspector' | 'batch' | 'lineage' | 'evidence' | 'settings';
 type InspectorTab = 'overview' | 'assertions' | 'cryptography' | 'raw-json';
 
 const STATUS_LABELS: Record<VerificationStatus, string> = {
@@ -69,6 +72,7 @@ const STATUS_TONES: Record<VerificationStatus, string> = {
 
 const NAV_ITEMS = [
   { id: 'inspector' as View, label: 'Inspector', icon: ScanSearch },
+  { id: 'batch' as View, label: 'Batch Report', icon: List },
   { id: 'lineage' as View, label: 'Manifest Lineage', icon: GitBranch },
   { id: 'evidence' as View, label: 'Evidence Export', icon: FileCheck2 },
   { id: 'settings' as View, label: 'Trust Anchors / Settings', icon: Settings }
@@ -218,13 +222,13 @@ function EmptyInspector() {
   );
 }
 
-function FutureView({ view, result }: { view: Exclude<View, 'inspector'>; result: VerificationResult | null }) {
-  const titles: Record<Exclude<View, 'inspector'>, string> = {
+function FutureView({ view, result }: { view: Exclude<View, 'inspector' | 'batch'>; result: VerificationResult | null }) {
+  const titles: Record<Exclude<View, 'inspector' | 'batch'>, string> = {
     lineage: 'Manifest Lineage',
     evidence: 'Evidence Export',
     settings: 'Trust Anchors / Settings'
   };
-  const descriptions: Record<Exclude<View, 'inspector'>, string> = {
+  const descriptions: Record<Exclude<View, 'inspector' | 'batch'>, string> = {
     lineage: 'Trace active and ingredient manifests in the provenance chain.',
     evidence: 'Package verification results, hashes, and validation codes for review.',
     settings: 'Configure trust policy and local processing preferences.'
@@ -249,6 +253,292 @@ function FutureView({ view, result }: { view: Exclude<View, 'inspector'>; result
           Return to Inspector
         </button>
       </section>
+    </main>
+  );
+}
+
+/* ── Batch Report View ────────────────────────────────────────── */
+
+interface BatchItem {
+  id: number;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  result: VerificationResult | null;
+  status: 'pending' | 'verifying' | 'done' | 'error';
+}
+
+let batchIdCounter = 0;
+
+function BatchView({ showToast }: { showToast: (msg: string) => void }) {
+  const [items, setItems] = useState<BatchItem[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function processFiles(files: FileList | File[]) {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    setIsProcessing(true);
+    const newItems: BatchItem[] = fileArray.map((f) => ({
+      id: ++batchIdCounter,
+      fileName: f.name,
+      fileSize: f.size,
+      mimeType: f.type || 'application/octet-stream',
+      result: null,
+      status: 'verifying' as const,
+    }));
+
+    setItems((prev) => [...prev, ...newItems]);
+
+    // Process in parallel batches of 4
+    const BATCH_SIZE = 4;
+    for (let i = 0; i < fileArray.length; i += BATCH_SIZE) {
+      const batch = fileArray.slice(i, i + BATCH_SIZE);
+      const batchItems = newItems.slice(i, i + BATCH_SIZE);
+
+      const results = await Promise.allSettled(
+        batch.map((file) => verifyFile(file))
+      );
+
+      setItems((prev) =>
+        prev.map((item) => {
+          const idx = batchItems.findIndex((b) => b.id === item.id);
+          if (idx === -1) return item;
+          const result = results[idx];
+          return {
+            ...item,
+            result: result.status === 'fulfilled' ? result.value : errorResult(item.fileName, item.fileSize, item.mimeType, '', result.reason),
+            status: 'done' as const,
+          };
+        })
+      );
+    }
+
+    setIsProcessing(false);
+    showToast(`Processed ${fileArray.length} files`);
+  }
+
+  function handleFolderSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    void processFiles(e.target.files ?? []);
+    e.target.value = '';
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    void processFiles(e.target.files ?? []);
+    e.target.value = '';
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    void processFiles(e.dataTransfer.files);
+  }
+
+  function clearResults() {
+    setItems([]);
+    showToast('Batch results cleared');
+  }
+
+  function exportCSV() {
+    if (items.length === 0) return;
+    const headers = ['File Name', 'File Size', 'MIME Type', 'Has C2PA', 'Validation State', 'Manifest Count', 'Issuer', 'Claim Generator', 'Signature Algorithm', 'SHA-256'];
+    const rows = items.map((item) => {
+      const r = item.result;
+      const active = r?.manifests.find((m) => m.isActive) ?? r?.manifests[0];
+      return [
+        item.fileName,
+        String(item.fileSize),
+        item.mimeType,
+        r ? (r.status === 'ready' ? 'Yes' : 'No') : 'Pending',
+        r?.validationState ?? 'Pending',
+        String(r?.manifestCount ?? 0),
+        active?.issuer ?? '',
+        active?.claimGenerator ?? '',
+        active?.signatureAlgorithm ?? '',
+        r?.sha256 ?? '',
+      ];
+    });
+    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
+    downloadFile(csv, 'batch-report.csv', 'text/csv');
+    showToast('CSV exported');
+  }
+
+  function exportJSON() {
+    if (items.length === 0) return;
+    const data = items.map((item) => {
+      const r = item.result;
+      const active = r?.manifests.find((m) => m.isActive) ?? r?.manifests[0];
+      return {
+        fileName: item.fileName,
+        fileSize: item.fileSize,
+        mimeType: item.mimeType,
+        hasC2PA: r ? r.status === 'ready' : null,
+        validationState: r?.validationState ?? null,
+        manifestCount: r?.manifestCount ?? 0,
+        issuer: active?.issuer ?? null,
+        claimGenerator: active?.claimGenerator ?? null,
+        signatureAlgorithm: active?.signatureAlgorithm ?? null,
+        signedAt: active?.signedAt ?? null,
+        sha256: r?.sha256 ?? null,
+        validationCodes: r?.manifests.flatMap((m) => m.validationCodes) ?? [],
+      };
+    });
+    downloadFile(JSON.stringify(data, null, 2), 'batch-report.json', 'application/json');
+    showToast('JSON exported');
+  }
+
+  function downloadFile(content: string, filename: string, type: string) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const doneCount = items.filter((i) => i.status === 'done').length;
+  const trustedCount = items.filter((i) => i.result?.validationState === 'Trusted').length;
+  const validCount = items.filter((i) => i.result?.validationState === 'Valid').length;
+  const invalidCount = items.filter((i) => i.result?.validationState === 'Invalid').length;
+  const missingCount = items.filter((i) => i.result?.status === 'missing').length;
+
+  return (
+    <main className="batch-view" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
+      <div className="batch-header">
+        <div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 600, letterSpacing: '-0.02em' }}>Batch Inspection Report</h1>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--color-on-surface-dim)', marginTop: 4 }}>
+            Select a folder or multiple files to generate a provenance audit report. Export as CSV or JSON.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="action-tactile button-primary" type="button" onClick={() => folderInputRef.current?.click()} disabled={isProcessing}>
+            <FolderOpen size={15} /> Select Folder
+          </button>
+          <button className="action-tactile button-secondary" type="button" onClick={() => fileInputRef.current?.click()} disabled={isProcessing}>
+            <Upload size={15} /> Select Files
+          </button>
+          {items.length > 0 && (
+            <>
+              <button className="action-tactile button-ghost" type="button" onClick={clearResults}>
+                <Trash2 size={15} /> Clear
+              </button>
+              <button className="action-tactile button-secondary" type="button" onClick={exportCSV}>
+                <Download size={15} /> CSV
+              </button>
+              <button className="action-tactile button-secondary" type="button" onClick={exportJSON}>
+                <Download size={15} /> JSON
+              </button>
+            </>
+          )}
+          <input ref={folderInputRef} className="visually-hidden" type="file" {...{ webkitdirectory: '' }} multiple onChange={handleFolderSelect} />
+          <input ref={fileInputRef} className="visually-hidden" type="file" accept={ACCEPTED_TYPES} multiple onChange={handleFileSelect} />
+        </div>
+      </div>
+
+      {/* Summary Bar */}
+      {items.length > 0 && (
+        <div className="batch-summary">
+          <div className="batch-summary-stat">
+            <span className="batch-summary-label">Total</span>
+            <strong>{items.length}</strong>
+          </div>
+          <div className="batch-summary-stat">
+            <span className="batch-summary-label">Processed</span>
+            <strong>{doneCount}</strong>
+          </div>
+          <div className="batch-summary-stat success">
+            <span className="batch-summary-label">Trusted</span>
+            <strong>{trustedCount}</strong>
+          </div>
+          <div className="batch-summary-stat info">
+            <span className="batch-summary-label">Valid</span>
+            <strong>{validCount}</strong>
+          </div>
+          <div className="batch-summary-stat warning">
+            <span className="batch-summary-label">No C2PA</span>
+            <strong>{missingCount}</strong>
+          </div>
+          <div className="batch-summary-stat danger">
+            <span className="batch-summary-label">Invalid</span>
+            <strong>{invalidCount}</strong>
+          </div>
+          {isProcessing && (
+            <div className="batch-summary-stat">
+              <RefreshCw size={14} className="spin" style={{ color: 'var(--color-primary)' }} />
+              <span className="batch-summary-label">Processing...</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Results Table */}
+      {items.length > 0 ? (
+        <div className="batch-table-wrap">
+          <table className="batch-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>File Name</th>
+                <th>Size</th>
+                <th>MIME</th>
+                <th>Has C2PA</th>
+                <th>Validation</th>
+                <th>Issuer</th>
+                <th>Claim Generator</th>
+                <th>Algorithm</th>
+                <th>SHA-256</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, idx) => {
+                const r = item.result;
+                const active = r?.manifests.find((m) => m.isActive) ?? r?.manifests[0];
+                return (
+                  <tr key={item.id} className="stagger-row">
+                    <td className="batch-cell-mono">{idx + 1}</td>
+                    <td className="batch-cell-name" title={item.fileName}>{item.fileName}</td>
+                    <td className="batch-cell-mono">{formatBytes(item.fileSize)}</td>
+                    <td className="batch-cell-mono">{item.mimeType}</td>
+                    <td>
+                      {item.status === 'verifying' ? (
+                        <span className="batch-badge pending">Pending</span>
+                      ) : r?.status === 'ready' ? (
+                        <span className="batch-badge success">Yes</span>
+                      ) : (
+                        <span className="batch-badge muted">No</span>
+                      )}
+                    </td>
+                    <td>
+                      {r?.validationState === 'Trusted' ? (
+                        <span className="batch-badge success">Trusted</span>
+                      ) : r?.validationState === 'Valid' ? (
+                        <span className="batch-badge info">Valid</span>
+                      ) : r?.validationState === 'Invalid' ? (
+                        <span className="batch-badge danger">Invalid</span>
+                      ) : (
+                        <span className="batch-badge pending">—</span>
+                      )}
+                    </td>
+                    <td className="batch-cell-mono" title={active?.issuer ?? ''}>{active?.issuer ?? '—'}</td>
+                    <td className="batch-cell-mono" title={active?.claimGenerator ?? ''}>{active?.claimGenerator ?? '—'}</td>
+                    <td className="batch-cell-mono">{active?.signatureAlgorithm ?? '—'}</td>
+                    <td className="batch-cell-hash" title={r?.sha256 ?? ''}>{r ? shortHash(r.sha256) : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="batch-empty">
+          <FolderOpen size={48} style={{ color: 'var(--color-outline)' }} />
+          <h3>No files selected</h3>
+          <p>Drop files here, select a folder, or pick individual files to start batch inspection.</p>
+        </div>
+      )}
     </main>
   );
 }
@@ -416,6 +706,17 @@ export default function App() {
   const activeManifest = result?.manifests.find((m) => m.isActive) ?? result?.manifests[0];
   const signaturePassed = result ? result.validationState !== 'Invalid' : undefined;
   const trustPassed = result ? result.validationState === 'Trusted' : undefined;
+
+  if (view === 'batch') {
+    return (
+      <div className="app-frame">
+        <Header view={view} setView={setView} />
+        <BatchView showToast={showToast} />
+        <Footer />
+        <ToastContainer toasts={toasts} />
+      </div>
+    );
+  }
 
   if (view !== 'inspector') {
     return (
