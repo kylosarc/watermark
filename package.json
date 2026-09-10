@@ -12,6 +12,9 @@
   },
   "dependencies": {
     "@contentauth/c2pa-web": "^0.14.5",
+    "@fontsource/geist": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "lucide-react": "^1.43.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
