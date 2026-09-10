@@ -18,7 +18,7 @@ npm install
 npm run dev
 ```
 
-Vite serves the app at `http://localhost:5173`. Port `8766` is reserved for another local service and is not used by this project.
+Vite serves the app at `http://localhost:5173`.
 
 ## Commands
 
