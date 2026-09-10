@@ -1860,13 +1860,105 @@ function analyzeText(text: string): TextAnalysis {
     }
   }
 
-  // Signal 8: AI-typical phrases
-  const aiPhrases = ['it is important to note', 'it is worth noting', 'in conclusion', 'furthermore', 'moreover', 'in addition', 'as a result', 'in this essay', 'this article will', 'let us delve', 'without further ado', 'in today\'s world', 'in the realm of', 'it goes without saying', 'needless to say', 'it is crucial to understand', 'as we delve', 'buckle up', 'dive deep', 'game changer', 'landscape', 'tapestry', 'multifaceted', 'holistic approach', 'synergy', 'leverage', 'paradigm shift', 'cutting edge', 'state of the art', 'at the end of the day'];
+  // Signal 8: AI-typical phrases (comprehensive list)
+  const aiPhrases = [
+    // Classic filler phrases
+    'it is important to note', 'it is worth noting', 'in conclusion', 'furthermore', 'moreover',
+    'in addition', 'as a result', 'in this essay', 'this article will', 'let us delve',
+    'without further ado', 'in today\'s world', 'in the realm of', 'it goes without saying',
+    'needless to say', 'it is crucial to understand', 'as we delve', 'buckle up', 'dive deep',
+    'game changer', 'holistic approach', 'synergy', 'leverage', 'paradigm shift',
+    'cutting edge', 'state of the art', 'at the end of the day',
+    // Stands/serves as patterns
+    'serves as a testament', 'stands as a reminder', 'plays a crucial role',
+    'plays a pivotal role', 'plays a vital role', 'plays a significant role',
+    'plays a key role', 'plays a key moment', 'underscores its importance',
+    'underscores its significance', 'reflects broader', 'symbolizing its',
+    'contributing to the', 'setting the stage for', 'marking a shift',
+    'shaping the', 'key turning point', 'evolving landscape', 'focal point',
+    'indelible mark', 'deeply rooted',
+    // Highlighting/ensuring patterns
+    'highlighting the', 'underscoring the', 'emphasizing the',
+    'ensuring that', 'reflecting the', 'symbolizing the',
+    'contributing to the', 'cultivating', 'fostering', 'encompassing',
+    'enhancing', 'valuable insights', 'align with', 'resonate with',
+    // Transition words (especially sentence-starting)
+    'additionally,', 'furthermore,', 'moreover,', 'consequently,',
+    'nevertheless,', 'nonetheless,', 'accordingly,', 'subsequently,',
+    // Verbose synonyms
+    'boasts', 'bolstered', 'crucial', 'deep dive', 'delve',
+    'emphasizing', 'enduring', 'enhance', 'fostering', 'garner',
+    'highlight', 'interplay', 'intricate', 'intricacies',
+    'landscape', 'meticulous', 'meticulously', 'pivotal', 'robust',
+    'showcase', 'tapestry', 'testament', 'underscore', 'valuable', 'vibrant',
+    // Structural patterns
+    'despite its', 'faces several challenges', 'despite these challenges',
+    'challenges and legacy', 'future outlook',
+    // Verb patterns
+    'serves as', 'stands as', 'marks', 'functions as', 'operates as',
+    'represents', 'boasts', 'features', 'maintains', 'offers', 'refers to',
+    // Comparison patterns
+    'not just', 'but also',
+    // Chatbot patterns
+    'worth surfacing', 'honest', 'not just', 'shaped', 'shipped',
+    'claims', 'silently', 'surfaced', 'worth', 'ships',
+    'that\'s a real', 'honestly', 'honesty', 'that\'s not',
+    'pretends to', 'renaming it', 'unearned', 'earned', 'real gap',
+    'problem underneath', 'carry', 'carries', 'smaller claim',
+    'reframe', 'reframing', 'reframed', 'adds nothing new', 'gap',
+    'want me to', 'flag', 'flagging', 'flagged', 'nothing I found',
+    'genuinely deserves',
+    // Helpfulness patterns
+    'i hope this helps', 'of course!', 'certainly!',
+    'you\'re absolutely right!', 'would you like', 'is there anything else',
+    'let me know', 'more detailed breakdown', 'here is a',
+    // Wikipedia/encyclopedia style
+    'ensured that', 'adheres to', 'refined', 'enhanced', 'enriched',
+    'streamlined', 'improved', 'in compliance with', 'complies with',
+    'wikipedia guidelines', 'wikipedia standards', 'revised',
+    'verifiability', 'neutrality', 'neutral tone', 'encyclopedic tone',
+    'clarity', 'flow',
+    // Marketing AI speak
+    'boasts a vibrant', 'rich', 'profound', 'enhancing', 'showcasing',
+    'exemplifies commitment to', 'natural beauty', 'nestled in the heart of',
+    'groundbreaking', 'renowned', 'featuring diverse array',
+  ];
   const lowerText = text.toLowerCase();
   const foundPhrases = aiPhrases.filter((p) => lowerText.includes(p));
   if (foundPhrases.length > 0) {
-    aiSignals.push(`AI-typical phrases found: "${foundPhrases.slice(0, 3).join('", "')}"`);
-    aiScore += Math.min(30, foundPhrases.length * 10);
+    aiSignals.push(`AI-typical phrases found: "${foundPhrases.slice(0, 3).join('", "')}"${foundPhrases.length > 3 ? ` (+${foundPhrases.length - 3} more)` : ''}`);
+    aiScore += Math.min(30, foundPhrases.length * 5);
+  }
+
+  // Signal 9: Em dash overuse (—)
+  const emDashCount = (text.match(/—/g) ?? []).length;
+  if (emDashCount > 3) {
+    aiSignals.push(`Frequent em dashes (${emDashCount} occurrences) — stylistic overuse`);
+    aiScore += Math.min(15, emDashCount * 2);
+  }
+
+  // Signal 10: Emoji detection
+  const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}]/gu;
+  const emojiCount = (text.match(emojiRegex) ?? []).length;
+  if (emojiCount > 0) {
+    aiSignals.push(`Emojis detected (${emojiCount} found) — unusual in formal text`);
+    aiScore += Math.min(10, emojiCount * 2);
+  }
+
+  // Signal 11: Overuse of bolding (markdown ** or __)
+  const boldPattern = /\*\*[^*]+\*\*|__[^_]+__/g;
+  const boldMatches = text.match(boldPattern) ?? [];
+  if (boldMatches.length > 5) {
+    aiSignals.push(`Heavy bolding (${boldMatches.length} instances) — excessive formatting`);
+    aiScore += Math.min(10, boldMatches.length);
+  }
+
+  // Signal 12: Dash separator patterns (----, ----, etc.)
+  const dashSeparatorRegex = /^[-=_]{3,}$/gm;
+  const dashSeparators = (text.match(dashSeparatorRegex) ?? []).length;
+  if (dashSeparators > 0) {
+    aiSignals.push(`Dash separators (${dashSeparators} found) — templated formatting`);
+    aiScore += dashSeparators * 3;
   }
 
   const aiConfidence = Math.min(100, aiScore);
