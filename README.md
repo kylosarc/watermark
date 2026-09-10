@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.svg" alt="Watermark" width="320">
+</p>
+
 # Watermark
 
 Watermark is a local-first web application for inspecting C2PA Content Credentials and understanding media provenance. The first release verifies media in the browser, computes a SHA-256 digest, distinguishes valid signatures from trusted issuers, and displays manifest lineage without uploading the asset.
