@@ -1911,6 +1911,61 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
   const [pasteText, setPasteText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Text simulator state
+  const [textSimResults, setTextSimResults] = useState<{ name: string; description: string; hash: string; preserved: boolean }[]>([]);
+  const [textSimRunning, setTextSimRunning] = useState(false);
+
+  async function hashText(text: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function runTextSimulations() {
+    if (!slot.content) return;
+    setTextSimRunning(true);
+    setTextSimResults([]);
+
+    const originalHash = slot.sha256;
+    const ops: { name: string; description: string; transform: (t: string) => string }[] = [
+      { name: 'Line Endings (LF → CRLF)', description: 'Convert Unix to Windows line endings', transform: (t) => t.replace(/\n/g, '\r\n') },
+      { name: 'Line Endings (CRLF → LF)', description: 'Convert Windows to Unix line endings', transform: (t) => t.replace(/\r\n/g, '\n') },
+      { name: 'Strip Trailing Whitespace', description: 'Remove trailing spaces/tabs per line', transform: (t) => t.split('\n').map((l) => l.trimEnd()).join('\n') },
+      { name: 'Add Trailing Newline', description: 'Ensure file ends with newline', transform: (t) => t.endsWith('\n') ? t : t + '\n' },
+      { name: 'Remove Trailing Newline', description: 'Strip final newline character', transform: (t) => t.replace(/\n$/, '') },
+      { name: 'Unicode NFC → NFD', description: 'Decompose composed characters', transform: (t) => t.normalize('NFD') },
+      { name: 'Unicode NFD → NFC', description: 'Recompose decomposed characters', transform: (t) => t.normalize('NFC') },
+      { name: 'Lowercase All', description: 'Convert entire text to lowercase', transform: (t) => t.toLowerCase() },
+      { name: 'Uppercase All', description: 'Convert entire text to uppercase', transform: (t) => t.toUpperCase() },
+      { name: 'Add BOM', description: 'Prepend UTF-8 Byte Order Mark', transform: (t) => '\uFEFF' + t },
+      { name: 'Remove BOM', description: 'Strip Byte Order Mark if present', transform: (t) => t.replace(/^\uFEFF/, '') },
+      { name: 'Collapse Whitespace', description: 'Replace multiple spaces with single', transform: (t) => t.replace(/ {2,}/g, ' ') },
+      { name: 'Add Header Line', description: 'Prepend a metadata header line', transform: (t) => '# Processed Document\n---\n' + t },
+      { name: 'Truncate 10%', description: 'Remove last 10% of characters', transform: (t) => t.slice(0, Math.floor(t.length * 0.9)) },
+      { name: 'Swap Lines', description: 'Reverse line order', transform: (t) => t.split('\n').reverse().join('\n') },
+      { name: 'Insert Line Numbers', description: 'Prepend line numbers to each line', transform: (t) => t.split('\n').map((l, i) => `${i + 1}: ${l}`).join('\n') },
+    ];
+
+    const results: typeof textSimResults = [];
+
+    for (const op of ops) {
+      const transformed = op.transform(slot.content);
+      const hash = await hashText(transformed);
+      results.push({
+        name: op.name,
+        description: op.description,
+        hash,
+        preserved: hash === originalHash,
+      });
+      setTextSimResults([...results]);
+    }
+
+    setTextSimRunning(false);
+    showToast('Text simulation complete');
+  }
+
   async function processText(text: string, source: 'file' | 'paste', fileName: string | null) {
     setSlot({ source, fileName, content: text, c2paResult: null, sha256: '', analysis: null, status: 'analyzing' });
 
@@ -2201,6 +2256,57 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
                   </div>
                 </div>
               )}
+
+              {/* What Would Break? Text Simulator */}
+              <div className="txt-simulator">
+                <div className="txt-sim-header">
+                  <h3>What Would Break This Text?</h3>
+                  <button
+                    className="action-tactile button-ghost"
+                    type="button"
+                    onClick={runTextSimulations}
+                    disabled={textSimRunning || slot.content.length === 0}
+                  >
+                    {textSimRunning ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
+                    {textSimRunning ? 'Running...' : 'Run Tests'}
+                  </button>
+                </div>
+
+                {textSimResults.length > 0 && (
+                  <>
+                    <div className="txt-sim-summary">
+                      <div className="txt-sim-stat preserved">
+                        <CheckCircle2 size={14} />
+                        <strong>{textSimResults.filter((r) => r.preserved).length}</strong>
+                        <span>Preserved</span>
+                      </div>
+                      <div className="txt-sim-stat broken">
+                        <AlertTriangle size={14} />
+                        <strong>{textSimResults.filter((r) => !r.preserved).length}</strong>
+                        <span>Changed</span>
+                      </div>
+                    </div>
+
+                    <div className="txt-sim-grid">
+                      {textSimResults.map((r) => (
+                        <div key={r.name} className={`txt-sim-card ${r.preserved ? 'preserved' : 'broken'}`}>
+                          <div className="txt-sim-card-status">
+                            {r.preserved ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                          </div>
+                          <div className="txt-sim-card-info">
+                            <span className="txt-sim-card-name">{r.name}</span>
+                            <span className="txt-sim-card-desc">{r.description}</span>
+                            <span className="txt-sim-card-hash" title={r.hash}>SHA-256: {r.hash.slice(0, 12)}…</span>
+                          </div>
+                          <span className={`txt-sim-badge ${r.preserved ? 'preserved' : 'broken'}`}>
+                            {r.preserved ? 'Same' : 'Different'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </>

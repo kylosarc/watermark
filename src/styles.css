@@ -3886,3 +3886,160 @@ pre {
     min-width: 100px;
   }
 }
+
+/* ── Text Simulator ──────────────────────────────────────────── */
+
+.txt-simulator {
+  padding: 16px;
+  background: var(--color-surface-lowest);
+  border: 1px solid rgba(61, 73, 76, 0.3);
+  border-radius: 10px;
+}
+
+.txt-sim-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.txt-sim-header h3 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-outline);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.txt-sim-summary {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.txt-sim-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.txt-sim-stat.preserved {
+  background: rgba(78, 222, 163, 0.1);
+  border: 1px solid rgba(78, 222, 163, 0.3);
+  color: var(--color-tertiary);
+}
+
+.txt-sim-stat.broken {
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: #f43f5e;
+}
+
+.txt-sim-stat strong {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.txt-sim-stat span {
+  font-size: 0.6875rem;
+  opacity: 0.8;
+}
+
+.txt-sim-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.txt-sim-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(61, 73, 76, 0.2);
+  background: var(--color-surface-container);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.txt-sim-card.preserved {
+  border-color: rgba(78, 222, 163, 0.3);
+  background: rgba(78, 222, 163, 0.04);
+}
+
+.txt-sim-card.broken {
+  border-color: rgba(244, 63, 94, 0.3);
+  background: rgba(244, 63, 94, 0.04);
+}
+
+.txt-sim-card-status {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.txt-sim-card.preserved .txt-sim-card-status { color: var(--color-tertiary); }
+.txt-sim-card.broken .txt-sim-card-status { color: #f43f5e; }
+
+.txt-sim-card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.txt-sim-card-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-on-surface);
+}
+
+.txt-sim-card-desc {
+  font-size: 0.625rem;
+  color: var(--color-outline);
+}
+
+.txt-sim-card-hash {
+  font-size: 0.5625rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--color-tertiary);
+  opacity: 0.7;
+}
+
+.txt-sim-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.txt-sim-badge.preserved {
+  background: rgba(78, 222, 163, 0.12);
+  color: var(--color-tertiary);
+  border: 1px solid rgba(78, 222, 163, 0.3);
+}
+
+.txt-sim-badge.broken {
+  background: rgba(244, 63, 94, 0.12);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+@media (max-width: 768px) {
+  .txt-sim-grid {
+    grid-template-columns: 1fr;
+  }
+}
