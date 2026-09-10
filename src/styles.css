@@ -2627,3 +2627,308 @@ pre {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ── What Would Break? Simulator ─────────────────────────────── */
+
+.sim-view {
+  padding: 120px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100vh;
+}
+
+.sim-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sim-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sim-drop {
+  border: 2px dashed rgba(61, 73, 76, 0.3);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  overflow: hidden;
+}
+
+.sim-drop:hover {
+  border-color: var(--color-primary);
+  background: rgba(76, 215, 246, 0.04);
+}
+
+.sim-drop-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+}
+
+.sim-drop-empty strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.sim-drop-empty span {
+  font-size: 0.75rem;
+  color: var(--color-outline);
+}
+
+.sim-drop-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.sim-drop-preview img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(61, 73, 76, 0.3);
+}
+
+.sim-drop-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sim-drop-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-drop-meta {
+  font-size: 0.6875rem;
+  color: var(--color-outline);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.sim-run-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sim-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(76, 215, 246, 0.08);
+  border: 1px solid rgba(76, 215, 246, 0.3);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  color: var(--color-primary);
+}
+
+.sim-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sim-summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+
+.sim-summary-stat.success {
+  background: rgba(78, 222, 163, 0.1);
+  border: 1px solid rgba(78, 222, 163, 0.3);
+  color: var(--color-tertiary);
+}
+
+.sim-summary-stat.danger {
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: #f43f5e;
+}
+
+.sim-summary-stat.warning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
+}
+
+.sim-summary-stat strong {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.sim-summary-stat span {
+  font-size: 0.6875rem;
+  color: var(--color-outline);
+}
+
+/* Results */
+
+.sim-results {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sim-category h3 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-outline);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.sim-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.sim-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(61, 73, 76, 0.2);
+  background: var(--color-surface-lowest);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.sim-card.passed {
+  border-color: rgba(78, 222, 163, 0.3);
+  background: rgba(78, 222, 163, 0.04);
+}
+
+.sim-card.failed {
+  border-color: rgba(244, 63, 94, 0.3);
+  background: rgba(244, 63, 94, 0.04);
+}
+
+.sim-card.error {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.sim-card.running {
+  border-color: rgba(76, 215, 246, 0.3);
+  background: rgba(76, 215, 246, 0.04);
+}
+
+.sim-card-status {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sim-card.passed .sim-card-status { color: var(--color-tertiary); }
+.sim-card.failed .sim-card-status { color: #f43f5e; }
+.sim-card.error .sim-card-status { color: #f59e0b; }
+.sim-card.running .sim-card-status { color: var(--color-primary); }
+
+.sim-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-outline);
+}
+
+.sim-card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sim-card-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-on-surface);
+}
+
+.sim-card-desc {
+  font-size: 0.6875rem;
+  color: var(--color-outline);
+}
+
+.sim-card-verdict {
+  flex-shrink: 0;
+}
+
+.sim-badge {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sim-badge.preserved {
+  background: rgba(78, 222, 163, 0.12);
+  color: var(--color-tertiary);
+  border: 1px solid rgba(78, 222, 163, 0.3);
+}
+
+.sim-badge.broken {
+  background: rgba(244, 63, 94, 0.12);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.sim-badge.error {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.sim-badge.running {
+  background: rgba(76, 215, 246, 0.12);
+  color: var(--color-primary);
+  border: 1px solid rgba(76, 215, 246, 0.3);
+}
+
+.sim-badge.pending {
+  background: var(--color-surface-high);
+  color: var(--color-outline);
+  border: 1px solid rgba(61, 73, 76, 0.3);
+}
+
+@media (max-width: 768px) {
+  .sim-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sim-summary {
+    flex-direction: column;
+  }
+}
