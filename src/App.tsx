@@ -18,6 +18,7 @@ import {
   Download,
   FileCheck2,
   FileJson,
+  FileText,
   FileUp,
   FolderOpen,
   Fingerprint,
@@ -38,6 +39,7 @@ import {
   Settings2,
   ShieldCheck,
   ShieldOff,
+  Sparkles,
   Trash2,
   Upload,
   UserRound,
@@ -54,7 +56,7 @@ import './styles.css';
 const ACCEPTED_TYPES = 'image/*,video/mp4,video/quicktime,audio/*';
 const SAMPLE_NAME = 'alpine_dawn_capture_2025.jpg';
 
-type View = 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'evidence' | 'settings';
+type View = 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text' | 'evidence' | 'settings';
 type InspectorTab = 'overview' | 'assertions' | 'cryptography' | 'raw-json';
 
 const STATUS_LABELS: Record<VerificationStatus, string> = {
@@ -82,6 +84,7 @@ const NAV_ITEMS = [
   { id: 'simulator' as View, label: 'What Would Break?', icon: Zap },
   { id: 'playground' as View, label: 'Trust Playground', icon: Settings2 },
   { id: 'lineage' as View, label: 'Manifest Lineage', icon: GitBranch },
+  { id: 'text' as View, label: 'Text Analysis', icon: FileText },
   { id: 'evidence' as View, label: 'Evidence Export', icon: FileCheck2 },
   { id: 'settings' as View, label: 'Trust Anchors / Settings', icon: Settings }
 ];
@@ -230,12 +233,12 @@ function EmptyInspector() {
   );
 }
 
-function FutureView({ view, result }: { view: Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage'>; result: VerificationResult | null }) {
-  const titles: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage'>, string> = {
+function FutureView({ view, result }: { view: Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>; result: VerificationResult | null }) {
+  const titles: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>, string> = {
     evidence: 'Evidence Export',
     settings: 'Trust Anchors / Settings'
   };
-  const descriptions: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage'>, string> = {
+  const descriptions: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>, string> = {
     evidence: 'Package verification results, hashes, and validation codes for review.',
     settings: 'Configure trust policy and local processing preferences.'
   };
@@ -1722,6 +1725,490 @@ function LineageView({ result, showToast }: { result: VerificationResult | null;
   );
 }
 
+/* ── Text Analysis View ────────────────────────────────────────── */
+
+interface TextAnalysis {
+  charCount: number;
+  wordCount: number;
+  sentenceCount: number;
+  paragraphCount: number;
+  lineCount: number;
+  avgWordLength: number;
+  avgSentenceLength: number;
+  vocabularyRichness: number; // unique words / total words
+  repetitionScore: number; // 0-100, higher = more repetitive
+  sentenceUniformity: number; // 0-100, higher = more uniform lengths
+  burstiness: number; // 0-100, higher = more varied (human-like)
+  topWords: [string, number][];
+  aiConfidence: number; // 0-100, estimated AI likelihood
+  aiSignals: string[];
+}
+
+function analyzeText(text: string): TextAnalysis {
+  const words = text.split(/\s+/).filter((w) => w.length > 0);
+  const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+  const paragraphs = text.split(/\n\s*\n/).filter((p) => p.trim().length > 0);
+  const lines = text.split('\n');
+
+  const charCount = text.length;
+  const wordCount = words.length;
+  const sentenceCount = sentences.length;
+  const paragraphCount = paragraphs.length;
+  const lineCount = lines.length;
+
+  const avgWordLength = wordCount > 0 ? words.reduce((sum, w) => sum + w.length, 0) / wordCount : 0;
+  const avgSentenceLength = sentenceCount > 0 ? wordCount / sentenceCount : 0;
+
+  // Vocabulary richness (type-token ratio)
+  const uniqueWords = new Set(words.map((w) => w.toLowerCase()));
+  const vocabularyRichness = wordCount > 0 ? uniqueWords.size / wordCount : 0;
+
+  // Repetition score
+  const wordFreq = new Map<string, number>();
+  words.forEach((w) => {
+    const low = w.toLowerCase();
+    wordFreq.set(low, (wordFreq.get(low) ?? 0) + 1);
+  });
+  const maxFreq = Math.max(...wordFreq.values(), 0);
+  const repetitionScore = wordCount > 0 ? Math.min(100, (maxFreq / wordCount) * 100 * 10) : 0;
+
+  // Sentence uniformity (coefficient of variation of sentence lengths)
+  const sentLengths = sentences.map((s) => s.split(/\s+/).length);
+  if (sentLengths.length > 1) {
+    const mean = sentLengths.reduce((a, b) => a + b, 0) / sentLengths.length;
+    const variance = sentLengths.reduce((sum, l) => sum + (l - mean) ** 2, 0) / sentLengths.length;
+    const cv = mean > 0 ? Math.sqrt(variance) / mean : 0;
+    // Low CV = uniform (AI-like), High CV = varied (human-like)
+  } else {
+    // Single sentence
+  }
+
+  // Burstiness (variance in sentence lengths — humans are bursty)
+  const burstiness = sentLengths.length > 1
+    ? Math.min(100, (() => {
+        const mean = sentLengths.reduce((a, b) => a + b, 0) / sentLengths.length;
+        const variance = sentLengths.reduce((sum, l) => sum + (l - mean) ** 2, 0) / sentLengths.length;
+        return Math.sqrt(variance) * 10;
+      })())
+    : 50;
+
+  // Top words (excluding common stop words)
+  const stopWords = new Set(['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'shall', 'can', 'need', 'dare', 'ought', 'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'out', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'because', 'but', 'and', 'or', 'if', 'while', 'that', 'this', 'these', 'those', 'it', 'its', 'i', 'me', 'my', 'we', 'our', 'you', 'your', 'he', 'him', 'his', 'she', 'her', 'they', 'them', 'their', 'what', 'which', 'who', 'whom']);
+  const filteredWords = words
+    .map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    .filter((w) => w.length > 2 && !stopWords.has(w));
+  const topFreq = new Map<string, number>();
+  filteredWords.forEach((w) => topFreq.set(w, (topFreq.get(w) ?? 0) + 1));
+  const topWords: [string, number][] = Array.from(topFreq.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+
+  // AI detection signals
+  const aiSignals: string[] = [];
+  let aiScore = 0;
+
+  // Signal 1: Low vocabulary richness (AI tends to use common words)
+  if (vocabularyRichness < 0.4 && wordCount > 50) {
+    aiSignals.push('Low vocabulary richness — limited word variety');
+    aiScore += 15;
+  }
+
+  // Signal 2: High sentence uniformity
+  if (sentLengths.length > 2) {
+    const mean = sentLengths.reduce((a, b) => a + b, 0) / sentLengths.length;
+    const variance = sentLengths.reduce((sum, l) => sum + (l - mean) ** 2, 0) / sentLengths.length;
+    const cv = mean > 0 ? Math.sqrt(variance) / mean : 0;
+    if (cv < 0.3) {
+      aiSignals.push('Uniform sentence lengths — low structural variation');
+      aiScore += 20;
+    }
+  }
+
+  // Signal 3: Low burstiness
+  if (burstiness < 25 && wordCount > 100) {
+    aiSignals.push('Low burstiness — sentences lack natural rhythm');
+    aiScore += 20;
+  }
+
+  // Signal 4: High repetition
+  if (repetitionScore > 5) {
+    aiSignals.push('High word repetition — formulaic patterns');
+    aiScore += 10;
+  }
+
+  // Signal 5: Very long avg sentence (AI can be verbose)
+  if (avgSentenceLength > 25) {
+    aiSignals.push('Long average sentences — verbose style');
+    aiScore += 10;
+  }
+
+  // Signal 6: Short avg word length (simple vocabulary)
+  if (avgWordLength < 4 && wordCount > 50) {
+    aiSignals.push('Short average word length — simple vocabulary');
+    aiScore += 5;
+  }
+
+  // Signal 7: Very consistent paragraph lengths
+  if (paragraphs.length > 2) {
+    const paraLengths = paragraphs.map((p) => p.split(/\s+/).length);
+    const paraMean = paraLengths.reduce((a, b) => a + b, 0) / paraLengths.length;
+    const paraVariance = paraLengths.reduce((sum, l) => sum + (l - paraMean) ** 2, 0) / paraLengths.length;
+    const paraCv = paraMean > 0 ? Math.sqrt(paraVariance) / paraMean : 0;
+    if (paraCv < 0.2) {
+      aiSignals.push('Uniform paragraph lengths — templated structure');
+      aiScore += 10;
+    }
+  }
+
+  // Signal 8: AI-typical phrases
+  const aiPhrases = ['it is important to note', 'it is worth noting', 'in conclusion', 'furthermore', 'moreover', 'in addition', 'as a result', 'in this essay', 'this article will', 'let us delve', 'without further ado', 'in today\'s world', 'in the realm of', 'it goes without saying', 'needless to say', 'it is crucial to understand', 'as we delve', 'buckle up', 'dive deep', 'game changer', 'landscape', 'tapestry', 'multifaceted', 'holistic approach', 'synergy', 'leverage', 'paradigm shift', 'cutting edge', 'state of the art', 'at the end of the day'];
+  const lowerText = text.toLowerCase();
+  const foundPhrases = aiPhrases.filter((p) => lowerText.includes(p));
+  if (foundPhrases.length > 0) {
+    aiSignals.push(`AI-typical phrases found: "${foundPhrases.slice(0, 3).join('", "')}"`);
+    aiScore += Math.min(30, foundPhrases.length * 10);
+  }
+
+  const aiConfidence = Math.min(100, aiScore);
+
+  return {
+    charCount,
+    wordCount,
+    sentenceCount,
+    paragraphCount,
+    lineCount,
+    avgWordLength,
+    avgSentenceLength,
+    vocabularyRichness,
+    repetitionScore,
+    sentenceUniformity: sentLengths.length > 1 ? (() => {
+      const mean = sentLengths.reduce((a, b) => a + b, 0) / sentLengths.length;
+      const variance = sentLengths.reduce((sum, l) => sum + (l - mean) ** 2, 0) / sentLengths.length;
+      const cv = mean > 0 ? Math.sqrt(variance) / mean : 0;
+      return Math.round((1 - Math.min(1, cv)) * 100);
+    })() : 50,
+    burstiness: Math.round(burstiness),
+    topWords,
+    aiConfidence,
+    aiSignals,
+  };
+}
+
+interface TextSlot {
+  source: 'file' | 'paste' | null;
+  fileName: string | null;
+  content: string;
+  c2paResult: VerificationResult | null;
+  sha256: string;
+  analysis: TextAnalysis | null;
+  status: 'empty' | 'analyzing' | 'done';
+}
+
+function TextView({ showToast }: { showToast: (msg: string) => void }) {
+  const [slot, setSlot] = useState<TextSlot>({
+    source: null, fileName: null, content: '', c2paResult: null, sha256: '', analysis: null, status: 'empty',
+  });
+  const [pasteText, setPasteText] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function processText(text: string, source: 'file' | 'paste', fileName: string | null) {
+    setSlot({ source, fileName, content: text, c2paResult: null, sha256: '', analysis: null, status: 'analyzing' });
+
+    // SHA-256
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+    // Analysis
+    const analysis = analyzeText(text);
+
+    // C2PA verification (for files only)
+    let c2paResult: VerificationResult | null = null;
+    if (source === 'file' && fileName) {
+      try {
+        const blob = new Blob([text], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
+        c2paResult = await verifyFile(file);
+      } catch {
+        // Text files may not have C2PA
+      }
+    }
+
+    setSlot({ source, fileName, content: text, c2paResult, sha256, analysis, status: 'done' });
+    showToast('Text analysis complete');
+  }
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      void processText(reader.result as string, 'file', file.name);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      void processText(reader.result as string, 'file', file.name);
+    };
+    reader.readAsText(file);
+  }
+
+  function handlePasteAnalysis() {
+    if (!pasteText.trim()) return;
+    void processText(pasteText, 'paste', null);
+  }
+
+  function clearAll() {
+    setSlot({ source: null, fileName: null, content: '', c2paResult: null, sha256: '', analysis: null, status: 'empty' });
+    setPasteText('');
+    showToast('Cleared');
+  }
+
+  function exportReport() {
+    if (!slot.analysis) return;
+    const report = {
+      source: slot.source,
+      fileName: slot.fileName,
+      sha256: slot.sha256,
+      stats: {
+        charCount: slot.analysis.charCount,
+        wordCount: slot.analysis.wordCount,
+        sentenceCount: slot.analysis.sentenceCount,
+        paragraphCount: slot.analysis.paragraphCount,
+        lineCount: slot.analysis.lineCount,
+        avgWordLength: slot.analysis.avgWordLength,
+        avgSentenceLength: slot.analysis.avgSentenceLength,
+      },
+      aiDetection: {
+        confidence: slot.analysis.aiConfidence,
+        signals: slot.analysis.aiSignals,
+        vocabularyRichness: slot.analysis.vocabularyRichness,
+        repetitionScore: slot.analysis.repetitionScore,
+        burstiness: slot.analysis.burstiness,
+      },
+      topWords: slot.analysis.topWords,
+    };
+    const json = JSON.stringify(report, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `text-analysis-${slot.fileName ?? 'paste'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Report exported');
+  }
+
+  function aiConfidenceColor(c: number) {
+    if (c <= 30) return 'var(--color-tertiary)';
+    if (c <= 60) return '#f59e0b';
+    return '#f43f5e';
+  }
+
+  function aiConfidenceLabel(c: number) {
+    if (c <= 20) return 'Likely human';
+    if (c <= 40) return 'Possibly human';
+    if (c <= 60) return 'Uncertain';
+    if (c <= 80) return 'Possibly AI';
+    return 'Likely AI';
+  }
+
+  const a = slot.analysis;
+
+  return (
+    <main className="txt-view">
+      <div className="txt-header">
+        <div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 600, letterSpacing: '-0.02em' }}>Text Analysis</h1>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--color-on-surface-dim)', marginTop: 4 }}>
+            Drop a text file or paste content to analyze provenance, integrity, and AI-generation signals.
+          </p>
+        </div>
+        {slot.status === 'done' && (
+          <div className="txt-actions">
+            <button className="action-tactile button-ghost" type="button" onClick={exportReport}>
+              <Download size={15} /> Export
+            </button>
+            <button className="action-tactile button-ghost" type="button" onClick={clearAll}>
+              <Trash2 size={15} /> Clear
+            </button>
+          </div>
+        )}
+      </div>
+
+      {slot.status === 'empty' ? (
+        <>
+          {/* File Drop */}
+          <div
+            className="txt-drop"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <div className="txt-drop-inner">
+              <Upload size={36} style={{ color: 'var(--color-outline)' }} />
+              <strong>Drop a text file</strong>
+              <span>.txt, .md, .json, .html, .csv, .xml, or any text-based format</span>
+            </div>
+            <input ref={fileInputRef} className="visually-hidden" type="file" accept=".txt,.md,.json,.html,.csv,.xml,.yaml,.yml,.toml,.log,.ini,.cfg,.conf,.js,.ts,.py,.go,.rs,.java,.c,.cpp,.h,.rb,.php,.sql,.sh,.bash,.css,.scss" onChange={handleFileInput} />
+          </div>
+
+          <div className="txt-divider"><span>or</span></div>
+
+          {/* Paste Area */}
+          <div className="txt-paste">
+            <textarea
+              className="txt-paste-input"
+              placeholder="Paste text content here..."
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              rows={8}
+            />
+            <button
+              className="action-tactile button-primary"
+              type="button"
+              onClick={handlePasteAnalysis}
+              disabled={!pasteText.trim()}
+            >
+              <Sparkles size={16} /> Analyze Text
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Loading */}
+          {slot.status === 'analyzing' && (
+            <div className="txt-progress">
+              <RefreshCw size={16} className="spin" />
+              <span>Analyzing text...</span>
+            </div>
+          )}
+
+          {/* Results */}
+          {a && (
+            <div className="txt-results">
+              {/* Source Info */}
+              <div className="txt-source">
+                <div className="txt-source-info">
+                  <FileText size={18} style={{ color: 'var(--color-primary)' }} />
+                  <span>{slot.source === 'file' ? slot.fileName : 'Pasted text'}</span>
+                </div>
+                <div className="txt-hash" title={slot.sha256}>
+                  <Fingerprint size={14} />
+                  <span>{slot.sha256.slice(0, 16)}…</span>
+                </div>
+              </div>
+
+              {/* C2PA Status */}
+              {slot.c2paResult && (
+                <div className={`txt-c2pa ${slot.c2paResult.status === 'ready' ? 'has-c2pa' : 'no-c2pa'}`}>
+                  {slot.c2paResult.status === 'ready' ? <ShieldCheck size={18} /> : <ShieldOff size={18} />}
+                  <div>
+                    <strong>{slot.c2paResult.status === 'ready' ? 'C2PA Manifest Found' : 'No C2PA Manifest'}</strong>
+                    <span>{slot.c2paResult.validationState}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* AI Confidence */}
+              <div className="txt-ai">
+                <div className="txt-ai-header">
+                  <Sparkles size={18} style={{ color: aiConfidenceColor(a.aiConfidence) }} />
+                  <div>
+                    <strong>AI Generation Likelihood</strong>
+                    <span>{aiConfidenceLabel(a.aiConfidence)}</span>
+                  </div>
+                  <strong className="txt-ai-score" style={{ color: aiConfidenceColor(a.aiConfidence) }}>{a.aiConfidence}%</strong>
+                </div>
+                <div className="txt-ai-bar">
+                  <div className="txt-ai-fill" style={{ width: `${a.aiConfidence}%`, background: aiConfidenceColor(a.aiConfidence) }} />
+                </div>
+                {a.aiSignals.length > 0 && (
+                  <div className="txt-ai-signals">
+                    {a.aiSignals.map((sig, i) => (
+                      <div key={i} className="txt-ai-signal">
+                        <AlertTriangle size={13} />
+                        <span>{sig}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Stats Grid */}
+              <div className="txt-stats">
+                <h3>Text Statistics</h3>
+                <div className="txt-stats-grid">
+                  <div className="txt-stat"><span>Characters</span><strong>{a.charCount.toLocaleString()}</strong></div>
+                  <div className="txt-stat"><span>Words</span><strong>{a.wordCount.toLocaleString()}</strong></div>
+                  <div className="txt-stat"><span>Sentences</span><strong>{a.sentenceCount.toLocaleString()}</strong></div>
+                  <div className="txt-stat"><span>Paragraphs</span><strong>{a.paragraphCount.toLocaleString()}</strong></div>
+                  <div className="txt-stat"><span>Lines</span><strong>{a.lineCount.toLocaleString()}</strong></div>
+                  <div className="txt-stat"><span>Avg Word Length</span><strong>{a.avgWordLength.toFixed(1)}</strong></div>
+                  <div className="txt-stat"><span>Avg Sentence Length</span><strong>{a.avgSentenceLength.toFixed(1)} words</strong></div>
+                  <div className="txt-stat"><span>Vocabulary Richness</span><strong>{(a.vocabularyRichness * 100).toFixed(1)}%</strong></div>
+                </div>
+              </div>
+
+              {/* Readability Metrics */}
+              <div className="txt-metrics">
+                <h3>Readability Metrics</h3>
+                <div className="txt-metrics-grid">
+                  <div className="txt-metric">
+                    <span>Burstiness</span>
+                    <div className="txt-metric-bar">
+                      <div className="txt-metric-fill" style={{ width: `${a.burstiness}%`, background: a.burstiness > 50 ? 'var(--color-tertiary)' : '#f59e0b' }} />
+                    </div>
+                    <span className="txt-metric-val">{a.burstiness}/100</span>
+                  </div>
+                  <div className="txt-metric">
+                    <span>Sentence Uniformity</span>
+                    <div className="txt-metric-bar">
+                      <div className="txt-metric-fill" style={{ width: `${a.sentenceUniformity}%`, background: a.sentenceUniformity > 70 ? '#f59e0b' : 'var(--color-tertiary)' }} />
+                    </div>
+                    <span className="txt-metric-val">{a.sentenceUniformity}/100</span>
+                  </div>
+                  <div className="txt-metric">
+                    <span>Repetition</span>
+                    <div className="txt-metric-bar">
+                      <div className="txt-metric-fill" style={{ width: `${Math.min(100, a.repetitionScore)}%`, background: a.repetitionScore > 5 ? '#f43f5e' : 'var(--color-tertiary)' }} />
+                    </div>
+                    <span className="txt-metric-val">{a.repetitionScore.toFixed(1)}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Words */}
+              {a.topWords.length > 0 && (
+                <div className="txt-topwords">
+                  <h3>Top Words</h3>
+                  <div className="txt-topwords-list">
+                    {a.topWords.map(([word, count]) => (
+                      <div key={word} className="txt-topword">
+                        <span className="txt-topword-word">{word}</span>
+                        <span className="txt-topword-count">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </main>
+  );
+}
+
 /* ── Batch Report View ────────────────────────────────────────── */
 
 interface BatchItem {
@@ -2221,6 +2708,17 @@ export default function App() {
       <div className="app-frame">
         <Header view={view} setView={setView} />
         <LineageView result={result} showToast={showToast} />
+        <Footer />
+        <ToastContainer toasts={toasts} />
+      </div>
+    );
+  }
+
+  if (view === 'text') {
+    return (
+      <div className="app-frame">
+        <Header view={view} setView={setView} />
+        <TextView showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
       </div>
