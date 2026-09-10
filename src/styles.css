@@ -3312,3 +3312,165 @@ pre {
     width: 100%;
   }
 }
+
+/* ── Manifest Lineage Graph ─────────────────────────────────── */
+
+.lineage-view {
+  padding: 120px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100vh;
+}
+
+.lineage-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lineage-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.lineage-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+  border: 2px dashed rgba(61, 73, 76, 0.3);
+  border-radius: 12px;
+}
+
+.lineage-empty h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-on-surface-dim);
+}
+
+.lineage-empty p {
+  font-size: 0.8125rem;
+  color: var(--color-outline);
+  max-width: 360px;
+}
+
+.lineage-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lineage-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lineage-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--color-outline);
+}
+
+.lineage-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.lineage-graph-wrap {
+  border: 1px solid rgba(61, 73, 76, 0.3);
+  border-radius: 10px;
+  background: var(--color-surface-lowest);
+  overflow: hidden;
+  height: 500px;
+}
+
+.lineage-svg {
+  display: block;
+  cursor: grab;
+  user-select: none;
+}
+
+.lineage-svg:active {
+  cursor: grabbing;
+}
+
+.lineage-node circle {
+  transition: stroke-width 0.2s;
+}
+
+.lineage-node.selected circle {
+  stroke-width: 3;
+}
+
+.lineage-node:hover circle {
+  filter: brightness(1.2);
+}
+
+/* Detail Panel */
+
+.lineage-detail {
+  padding: 16px;
+  background: var(--color-surface-lowest);
+  border: 1px solid rgba(61, 73, 76, 0.3);
+  border-radius: 10px;
+}
+
+.lineage-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.lineage-detail-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.lineage-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.lineage-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lineage-detail-item span {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-outline);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.lineage-detail-item strong {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-on-surface);
+}
+
+@media (max-width: 768px) {
+  .lineage-graph-wrap {
+    height: 350px;
+  }
+
+  .lineage-detail-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
