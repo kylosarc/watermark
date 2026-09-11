@@ -51,6 +51,7 @@ import { verifyFile } from './lib/c2pa';
 import { errorResult } from './lib/verification';
 import { formatBytes, sha256Hex } from './lib/file';
 import { extractTextFromFile, TEXT_ACCEPT, detectFormat } from './lib/extract';
+import { extractFileMetadata, type FileMetadata } from './lib/metadata';
 import {
   applyStripper, STRIPPER_DEFAULTS, STRIPPER_PRESETS,
   detectUnslopPatterns, applyUnslop,
@@ -63,7 +64,7 @@ const ACCEPTED_TYPES = 'image/*,video/mp4,video/quicktime,audio/*';
 const SAMPLE_NAME = 'alpine_dawn_capture_2025.jpg';
 
 type View = 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text' | 'evidence' | 'settings';
-type InspectorTab = 'overview' | 'assertions' | 'cryptography' | 'raw-json';
+type InspectorTab = 'overview' | 'assertions' | 'cryptography' | 'metadata' | 'raw-json';
 
 const STATUS_LABELS: Record<VerificationStatus, string> = {
   idle: 'Ready',
@@ -99,6 +100,7 @@ const INSPECTOR_TABS = [
   { id: 'overview' as InspectorTab, label: 'Manifest Overview', icon: Info },
   { id: 'assertions' as InspectorTab, label: 'Assertions & Ingredients', icon: Layers },
   { id: 'cryptography' as InspectorTab, label: 'Cryptographic Proof', icon: Lock },
+  { id: 'metadata' as InspectorTab, label: 'File Metadata', icon: ScanSearch },
   { id: 'raw-json' as InspectorTab, label: 'Raw JSON Manifest', icon: Code }
 ];
 
@@ -169,6 +171,123 @@ function CodeList({ codes }: { codes: ValidationCode[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/* ── Metadata Tab ────────────────────────────────────────────── */
+
+function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
+  const [metadata, setMetadata] = useState<FileMetadata | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string>('info');
+
+  useEffect(() => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+    extractFileMetadata(file, sha256)
+      .then(setMetadata)
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [file, sha256]);
+
+  if (!file) return <EmptyInspector />;
+  if (loading) return <div className="inspector-tab-content"><div className="panel" style={{ padding: 16 }}>Extracting metadata…</div></div>;
+  if (error) return <div className="inspector-tab-content"><div className="panel" style={{ padding: 16, color: 'var(--color-error)' }}>Error: {error}</div></div>;
+  if (!metadata) return null;
+
+  const categoryColors: Record<string, string> = {
+    info: 'var(--color-primary)',
+    camera: 'var(--color-secondary)',
+    location: 'var(--color-tertiary)',
+    dates: 'var(--color-primary)',
+    '版权': 'var(--color-secondary)',
+    technical: '#94a3b8',
+    ai: 'var(--color-warning)',
+    warning: 'var(--color-error)',
+  };
+
+  return (
+    <div className="inspector-tab-content">
+      <div className="panel" style={{ padding: 16 }}>
+        <span style={{ fontWeight: 600, color: 'var(--color-on-surface)' }}>File Metadata & Binary Analysis</span>
+
+        {/* Section tabs */}
+        <div className="metadata-section-tabs" style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+          {metadata.sections.map((section) => (
+            <button
+              key={section.label}
+              className={`tab-btn ${activeSection === section.label ? 'active' : ''}`}
+              type="button"
+              style={{ fontSize: 12, padding: '4px 10px' }}
+              onClick={() => setActiveSection(section.label)}
+            >
+              {section.label}
+            </button>
+          ))}
+          {metadata.binary.structure.length > 0 && (
+            <button
+              className={`tab-btn ${activeSection === 'structure' ? 'active' : ''}`}
+              type="button"
+              style={{ fontSize: 12, padding: '4px 10px' }}
+              onClick={() => setActiveSection('structure')}
+            >
+              Binary Structure
+            </button>
+          )}
+          <button
+            className={`tab-btn ${activeSection === 'hex' ? 'active' : ''}`}
+            type="button"
+            style={{ fontSize: 12, padding: '4px 10px' }}
+            onClick={() => setActiveSection('hex')}
+          >
+            Hex View
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ marginTop: 12 }}>
+          {activeSection === 'hex' ? (
+            <pre className="hex-view" style={{ fontSize: 11, lineHeight: 1.5, maxHeight: 400, overflow: 'auto', color: 'var(--color-on-surface)' }}>
+              {metadata.binary.hexPreview}
+            </pre>
+          ) : activeSection === 'structure' ? (
+            <div className="binary-structure">
+              {metadata.binary.structure.length === 0 ? (
+                <span style={{ color: 'var(--color-on-surface-variant)' }}>No structure detected for this file type.</span>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {metadata.binary.structure.map((s, i) => (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 80px 80px 1fr', gap: 8, fontSize: 12, fontFamily: 'var(--font-mono)', padding: '4px 0', borderBottom: '1px solid rgba(61,73,76,0.2)' }}>
+                      <span style={{ color: 'var(--color-primary)' }}>{s.name}</span>
+                      <span style={{ color: '#94a3b8' }}>0x{s.offset.toString(16).padStart(6, '0')}</span>
+                      <span style={{ color: '#94a3b8' }}>{s.length}B</span>
+                      <span style={{ color: 'var(--color-on-surface-variant)' }}>{s.description}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            metadata.sections.filter(s => s.label === activeSection).map((section) => (
+              <div key={section.label} className="metadata-entries">
+                {section.entries.map((entry) => (
+                  <div key={entry.key} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8, fontSize: 12, padding: '4px 0', borderBottom: '1px solid rgba(61,73,76,0.2)' }}>
+                    <span style={{ color: categoryColors[entry.category] ?? '#94a3b8', fontWeight: 500 }}>{entry.key}</span>
+                    <span style={{ color: 'var(--color-on-surface)', fontFamily: entry.key === 'SHA-256' || entry.key === 'Magic Bytes' ? 'var(--font-mono)' : 'inherit', wordBreak: 'break-all' }}>
+                      {entry.key === 'Google Maps' ? (
+                        <a href={entry.value} target="_blank" rel="noopener" style={{ color: 'var(--color-primary)' }}>{entry.value}</a>
+                      ) : entry.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -3144,6 +3263,7 @@ export default function App() {
   const [view, setView] = useState<View>('inspector');
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('overview');
   const [result, setResult] = useState<VerificationResult | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSample, setIsSample] = useState(false);
@@ -3231,6 +3351,7 @@ export default function App() {
     setIsVerifying(true);
     setIsSample(false);
     setResult(null);
+    setFile(file);
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
 
     const nextPreview = file.type.startsWith('image/') ? window.URL.createObjectURL(file) : null;
@@ -3807,6 +3928,11 @@ export default function App() {
                   )}
                 </div>
               </div>
+            )}
+
+            {/* TAB: File Metadata */}
+            {inspectorTab === 'metadata' && (
+              <MetadataTab file={file} sha256={result?.sha256 ?? ''} />
             )}
 
             {/* TAB: Raw JSON */}
