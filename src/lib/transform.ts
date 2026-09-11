@@ -91,6 +91,18 @@ export interface StripperOptions {
   anonymizeEmails: boolean;
   anonymizePhones: boolean;
   anonymizeUrls: boolean;
+  // PII redaction
+  stripSSN: boolean;
+  stripCreditCards: boolean;
+  stripBankAccounts: boolean;
+  stripDriversLicense: boolean;
+  stripPassport: boolean;
+  stripTaxIds: boolean;
+  stripApiKeys: boolean;
+  stripPasswords: boolean;
+  stripAddresses: boolean;
+  stripIban: boolean;
+  // Formatting
   stripMarkdown: boolean;
   stripHtml: boolean;
   stripLineNumbers: boolean;
@@ -113,6 +125,16 @@ export const STRIPPER_PRESETS: Record<string, Partial<StripperOptions>> = {
     anonymizeEmails: true,
     anonymizePhones: true,
     anonymizeUrls: true,
+    stripSSN: true,
+    stripCreditCards: true,
+    stripBankAccounts: true,
+    stripDriversLicense: true,
+    stripPassport: true,
+    stripTaxIds: true,
+    stripApiKeys: true,
+    stripPasswords: true,
+    stripAddresses: true,
+    stripIban: true,
   },
   clean: {
     stripMarkdown: true,
@@ -138,11 +160,37 @@ export const STRIPPER_PRESETS: Record<string, Partial<StripperOptions>> = {
     normalizeLineEndings: true,
     trimTrailingWhitespace: true,
   },
+  redact: {
+    anonymizeNames: true,
+    anonymizeEmails: true,
+    anonymizePhones: true,
+    anonymizeUrls: true,
+    stripSSN: true,
+    stripCreditCards: true,
+    stripBankAccounts: true,
+    stripDriversLicense: true,
+    stripPassport: true,
+    stripTaxIds: true,
+    stripApiKeys: true,
+    stripPasswords: true,
+    stripAddresses: true,
+    stripIban: true,
+  },
   full: {
     anonymizeNames: true,
     anonymizeEmails: true,
     anonymizePhones: true,
     anonymizeUrls: true,
+    stripSSN: true,
+    stripCreditCards: true,
+    stripBankAccounts: true,
+    stripDriversLicense: true,
+    stripPassport: true,
+    stripTaxIds: true,
+    stripApiKeys: true,
+    stripPasswords: true,
+    stripAddresses: true,
+    stripIban: true,
     stripMarkdown: true,
     stripHtml: true,
     stripLineNumbers: true,
@@ -164,6 +212,16 @@ export const STRIPPER_DEFAULTS: StripperOptions = {
   anonymizeEmails: false,
   anonymizePhones: false,
   anonymizeUrls: false,
+  stripSSN: false,
+  stripCreditCards: false,
+  stripBankAccounts: false,
+  stripDriversLicense: false,
+  stripPassport: false,
+  stripTaxIds: false,
+  stripApiKeys: false,
+  stripPasswords: false,
+  stripAddresses: false,
+  stripIban: false,
   stripMarkdown: false,
   stripHtml: false,
   stripLineNumbers: false,
@@ -220,6 +278,18 @@ export function applyStripper(text: string, opts: StripperOptions): string {
   });
   if (opts.anonymizeUrls) result = result.replace(/https?:\/\/[^\s<>"')]+|www\.[^\s<>"')]+/g, '[URL]');
   if (opts.anonymizeNames) result = anonymizeNames(result);
+
+  // PII Redaction
+  if (opts.stripSSN) result = redactSSN(result);
+  if (opts.stripCreditCards) result = redactCreditCards(result);
+  if (opts.stripBankAccounts) result = redactBankAccounts(result);
+  if (opts.stripDriversLicense) result = redactDriversLicense(result);
+  if (opts.stripPassport) result = redactPassport(result);
+  if (opts.stripTaxIds) result = redactTaxIds(result);
+  if (opts.stripApiKeys) result = redactApiKeys(result);
+  if (opts.stripPasswords) result = redactPasswords(result);
+  if (opts.stripAddresses) result = redactAddresses(result);
+  if (opts.stripIban) result = redactIban(result);
 
   // Whitespace normalization
   if (opts.normalizeWhitespace) {
@@ -291,6 +361,118 @@ function anonymizeNames(text: string): string {
     ]);
     if (keep.has(lower)) return match;
     return '[NAME]';
+  });
+}
+
+// ── PII Redaction ──────────────────────────────────────────────
+
+function redactSSN(text: string): string {
+  // US Social Security Numbers: 123-45-6789 or 123 45 6789 or 123456789
+  return text.replace(/\b\d{3}[\s\-]?\d{2}[\s\-]?\d{4}\b/g, (match) => {
+    const digits = match.replace(/\D/g, '');
+    if (digits.length === 9 && !digits.startsWith('000') && !digits.startsWith('666') && parseInt(digits.slice(0, 3)) <= 899) {
+      return '[SSN]';
+    }
+    return match;
+  });
+}
+
+function redactCreditCards(text: string): string {
+  // Credit card numbers: 4111-1111-1111-1111, 4111 1111 1111 1111, 4111111111111111
+  // Supports Visa (4xxx), Mastercard (5[1-5]xx, 2[2-7]xx), Amex (3[47]xx), Discover (6011, 65xx)
+  return text.replace(/\b(?:4\d{3}|5[1-5]\d{2}|2[2-7]\d{2}|3[47]\d{2}|6011|65\d{2})[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b/g, (match) => {
+    const digits = match.replace(/\D/g, '');
+    if (digits.length === 16 || digits.length === 15) {
+      // Basic Luhn check
+      if (luhnCheck(digits)) return '[CREDIT_CARD]';
+    }
+    return match;
+  });
+}
+
+function luhnCheck(num: string): boolean {
+  let sum = 0;
+  let alternate = false;
+  for (let i = num.length - 1; i >= 0; i--) {
+    let n = parseInt(num[i], 10);
+    if (isNaN(n)) return false;
+    if (alternate) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alternate = !alternate;
+  }
+  return sum % 10 === 0;
+}
+
+function redactBankAccounts(text: string): string {
+  // US bank account numbers: 8-17 digits, often with dashes or spaces
+  // Also catches routing numbers (9 digits) followed by account numbers
+  return text.replace(/\b(?:routing(?:\s*#?)?:?\s*)?(\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{1,5})\b/gi, (match, captured) => {
+    const digits = captured.replace(/\D/g, '');
+    if (digits.length >= 8 && digits.length <= 17) {
+      return '[BANK_ACCOUNT]';
+    }
+    return match;
+  });
+}
+
+function redactDriversLicense(text: string): string {
+  // US driver's license: typically 1-14 alphanumeric characters, format varies by state
+  // Common patterns: 1 letter + 4-12 digits, or 5-14 digits
+  return text.replace(/\b(?:driver'?s?\s*(?:licen[sc]e|lic\.?|dl\.?)\s*(?:#|num(?:ber)?|no\.?)?\s*:?\s*)([A-Z]\d{4,12}|\d{5,14})\b/gi, '[DRIVERS_LICENSE]');
+}
+
+function redactPassport(text: string): string {
+  // US passport: 1 letter + 8 digits (e.g., C12345678)
+  // UK passport: 9 digits (e.g., 123456789)
+  return text.replace(/\b(?:passport(?:\s*(?:#|num(?:ber)?|no\.?))?\s*:?\s*)([A-Z]\d{8}|\d{9})\b/gi, '[PASSPORT]');
+}
+
+function redactTaxIds(text: string): string {
+  // US EIN: XX-XXXXXXX (9 digits with dash after first 2)
+  return text.replace(/\b\d{2}\s*[\-]\s*\d{7}\b/g, (match) => {
+    const digits = match.replace(/\D/g, '');
+    if (digits.length === 9) return '[EIN]';
+    return match;
+  });
+  // US ITIN: 9XX-XX-XXXX (starts with 9, 90-99 range)
+}
+
+function redactApiKeys(text: string): string {
+  // Common API key patterns
+  // AWS: AKIA[0-9A-Z]{16}
+  // Generic: api[_\-]?key[_\-]?:?\s*[A-Za-z0-9\-_]{20,}
+  // Bearer tokens
+  let result = text;
+  result = result.replace(/\bAKIA[0-9A-Z]{16}\b/g, '[AWS_KEY]');
+  result = result.replace(/\b(?:api[_\-]?key|apikey|api[_\-]?secret)\s*[:=]\s*['"]?([A-Za-z0-9\-_]{20,})['"]?/gi, '[API_KEY]');
+  result = result.replace(/\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{20,}\b/g, '[API_KEY]');
+  result = result.replace(/\bghp_[A-Za-z0-9]{36}\b/g, '[GITHUB_TOKEN]');
+  result = result.replace(/\bglpat-[A-Za-z0-9\-_]{20,}\b/g, '[GITLAB_TOKEN]');
+  result = result.replace(/\bxox[baprs]-[A-Za-z0-9\-]{10,}\b/g, '[SLACK_TOKEN]');
+  return result;
+}
+
+function redactPasswords(text: string): string {
+  // Password fields: password, passwd, pwd, secret followed by value
+  return text.replace(/\b(?:password|passwd|pwd|secret|token|auth)\s*[:=]\s*['"]?([^\s'"<>]{6,})['"]?/gi, '[PASSWORD]');
+}
+
+function redactAddresses(text: string): string {
+  // US street addresses: 123 Main St, 123 Main Street, 123 Main Ave, etc.
+  return text.replace(/\b\d{1,5}\s+(?:[A-Z][a-zA-Z]*\s+){1,3}(?:St(?:reet)?|Ave(?:nue)?|Blvd|Boulevard|Dr(?:ive)?|Rd|Road|Way|Ln|Lane|Ct|Court|Pl(?:ace)?|Pkwy|Parkway|Cir(?:cle)?)\.?(?:\s*,?\s*(?:Apt|Suite|Ste|Unit|#)\s*\d+)?\b/gi, '[ADDRESS]');
+}
+
+function redactIban(text: string): string {
+  // IBAN: 2 letter country code + 2 check digits + up to 30 alphanumeric
+  return text.replace(/\b[A-Z]{2}\d{2}[\s]?[\dA-Z]{4}[\s]?(?:[\dA-Z]{4}[\s]?){1,7}[\dA-Z]{1,4}\b/g, (match) => {
+    const stripped = match.replace(/\s/g, '');
+    if (stripped.length >= 15 && stripped.length <= 34 && /^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(stripped)) {
+      return '[IBAN]';
+    }
+    return match;
   });
 }
 

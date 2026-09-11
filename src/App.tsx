@@ -2717,6 +2717,18 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
             <label className="xform-check"><input type="checkbox" checked={stripOpts.anonymizePhones} onChange={(e) => setStripOpts({ ...stripOpts, anonymizePhones: e.target.checked })} /> <span>Phones → [PHONE]</span></label>
             <label className="xform-check"><input type="checkbox" checked={stripOpts.anonymizeUrls} onChange={(e) => setStripOpts({ ...stripOpts, anonymizeUrls: e.target.checked })} /> <span>URLs → [URL]</span></label>
 
+            <h4>Redact PII</h4>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripSSN} onChange={(e) => setStripOpts({ ...stripOpts, stripSSN: e.target.checked })} /> <span>SSN → [SSN]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripCreditCards} onChange={(e) => setStripOpts({ ...stripOpts, stripCreditCards: e.target.checked })} /> <span>Credit cards → [CREDIT_CARD]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripBankAccounts} onChange={(e) => setStripOpts({ ...stripOpts, stripBankAccounts: e.target.checked })} /> <span>Bank accounts → [BANK_ACCOUNT]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripDriversLicense} onChange={(e) => setStripOpts({ ...stripOpts, stripDriversLicense: e.target.checked })} /> <span>Driver's license → [DRIVERS_LICENSE]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripPassport} onChange={(e) => setStripOpts({ ...stripOpts, stripPassport: e.target.checked })} /> <span>Passport → [PASSPORT]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripTaxIds} onChange={(e) => setStripOpts({ ...stripOpts, stripTaxIds: e.target.checked })} /> <span>Tax IDs (EIN) → [EIN]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripApiKeys} onChange={(e) => setStripOpts({ ...stripOpts, stripApiKeys: e.target.checked })} /> <span>API keys / tokens → [API_KEY]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripPasswords} onChange={(e) => setStripOpts({ ...stripOpts, stripPasswords: e.target.checked })} /> <span>Passwords → [PASSWORD]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripAddresses} onChange={(e) => setStripOpts({ ...stripOpts, stripAddresses: e.target.checked })} /> <span>Street addresses → [ADDRESS]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripIban} onChange={(e) => setStripOpts({ ...stripOpts, stripIban: e.target.checked })} /> <span>IBAN → [IBAN]</span></label>
+
             <h4>Strip Formatting</h4>
             <label className="xform-check"><input type="checkbox" checked={stripOpts.stripMarkdown} onChange={(e) => setStripOpts({ ...stripOpts, stripMarkdown: e.target.checked })} /> <span>Markdown syntax</span></label>
             <label className="xform-check"><input type="checkbox" checked={stripOpts.stripHtml} onChange={(e) => setStripOpts({ ...stripOpts, stripHtml: e.target.checked })} /> <span>HTML tags</span></label>
