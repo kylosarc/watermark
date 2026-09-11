@@ -2720,6 +2720,10 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
             <label className="xform-check"><input type="checkbox" checked={stripOpts.stripLineNumbers} onChange={(e) => setStripOpts({ ...stripOpts, stripLineNumbers: e.target.checked })} /> <span>Line numbers</span></label>
             <label className="xform-check"><input type="checkbox" checked={stripOpts.stripBom} onChange={(e) => setStripOpts({ ...stripOpts, stripBom: e.target.checked })} /> <span>BOM character</span></label>
             <label className="xform-check"><input type="checkbox" checked={stripOpts.stripNonPrintable} onChange={(e) => setStripOpts({ ...stripOpts, stripNonPrintable: e.target.checked })} /> <span>Non-printable chars</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripInvisibleChars} onChange={(e) => setStripOpts({ ...stripOpts, stripInvisibleChars: e.target.checked })} /> <span>Invisible Unicode (ZWSP, tag chars, exotic spaces)</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripBidiControls} onChange={(e) => setStripOpts({ ...stripOpts, stripBidiControls: e.target.checked })} /> <span>Bidi controls (Trojan Source defense)</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.normalizeTypography} onChange={(e) => setStripOpts({ ...stripOpts, normalizeTypography: e.target.checked })} /> <span>Smart quotes, dashes, ellipsis → ASCII</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.detectHomoglyphs} onChange={(e) => setStripOpts({ ...stripOpts, detectHomoglyphs: e.target.checked })} /> <span>Homoglyphs (Cyrillic/Greek lookalikes)</span></label>
 
             <h4>Normalize</h4>
             <label className="xform-check"><input type="checkbox" checked={stripOpts.normalizeWhitespace} onChange={(e) => setStripOpts({ ...stripOpts, normalizeWhitespace: e.target.checked })} /> <span>Collapse whitespace</span></label>

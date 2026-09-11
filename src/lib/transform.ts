@@ -1,5 +1,88 @@
 /* ── Text Transformation Engine ────────────────────────────────── */
 // Stripper/obfuscator + unsloper — all pure functions, no side effects.
+// Rules adapted from watermark-cleaner (MIT) by pixelstrunk.
+
+// ── Invisible Character Rules (from watermark-cleaner/rules/characters.json) ──
+
+const INVISIBLE_CHARS_ALWAYS_REMOVE = [
+  '\u200B', // zero width space
+  '\u2060', // word joiner
+  '\uFEFF', // BOM / zero width no-break space
+  '\u00AD', // soft hyphen
+  '\u180E', // mongolian vowel separator
+  '\u034F', // combining grapheme joiner
+  '\u2061', // function application
+  '\u2062', // invisible times
+  '\u2063', // invisible separator
+  '\u2064', // invisible plus
+  '\u3164', // hangul filler
+  '\uFFA0', // halfwidth hangul filler
+];
+
+const INVISIBLE_CHARS_RANGES: Array<{ from: string; to: string }> = [
+  { from: 'E0000', to: 'E007F' }, // unicode tag characters (hidden payload)
+  { from: '206A', to: '206F' },   // deprecated format characters
+  { from: 'FFF9', to: 'FFFB' },   // interlinear annotation characters
+];
+
+// Exotic spaces → normal space
+const EXOTIC_SPACES = new Set([
+  '\u00A0', '\u1680',
+  '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005',
+  '\u2006', '\u2007', '\u2008', '\u2009', '\u200A',
+  '\u202F', '\u205F', '\u3000',
+  '\u2028', '\u2029', // line/paragraph separator
+  '\u2800',           // braille blank
+]);
+
+// Bidi control characters (Trojan Source defense for LTR docs)
+const BIDI_CHARS = new Set([
+  '\u200E', '\u200F', '\u061C', // LRM, RLM, ALM
+]);
+const BIDI_CONTROL_RANGES: Array<{ from: string; to: string }> = [
+  { from: '202A', to: '202E' }, // bidi embedding/override
+  { from: '2066', to: '2069' }, // bidi isolate
+];
+
+// ── Typography Rules (from watermark-cleaner/rules/typography.json) ──
+
+const SMART_QUOTES: Record<string, string> = {
+  '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u201B': "'",
+  '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"',
+  '\u2039': "'", '\u203A': "'", '\u00AB': '"', '\u00BB': '"',
+};
+
+const PUNCTUATION_NORMALIZE: Record<string, string> = {
+  '\u2026': '...',  // ellipsis
+  '\u2024': '.',    // leader dot
+  '\u2025': '..',   // double leader dot
+  '\u2022': '-',    // bullet
+  '\u2023': '-',    // triangular bullet
+  '\u25E6': '-',    // white bullet
+  '\u2043': '-',    // hyphen bullet
+  '\u2219': '-',    // bullet operator
+  '\u00B7': '-',    // middle dot
+};
+
+// ── Homoglyph Rules (from watermark-cleaner/rules/homoglyphs.json) ──
+
+const HOMOGLYPHS: Record<string, string> = {
+  // Cyrillic → Latin
+  '\u0410': 'A', '\u0412': 'B', '\u0415': 'E', '\u041A': 'K',
+  '\u041C': 'M', '\u041D': 'H', '\u041E': 'O', '\u0420': 'P',
+  '\u0421': 'C', '\u0422': 'T', '\u0423': 'Y', '\u0425': 'X',
+  '\u0430': 'a', '\u0435': 'e', '\u043E': 'o', '\u0440': 'p',
+  '\u0441': 'c', '\u0443': 'y', '\u0445': 'x', '\u0456': 'i',
+  '\u0455': 's', '\u0458': 'j', '\u04BB': 'h',
+  // Greek → Latin
+  '\u0391': 'A', '\u0392': 'B', '\u0395': 'E', '\u0396': 'Z',
+  '\u0397': 'H', '\u0399': 'I', '\u039A': 'K', '\u039C': 'M',
+  '\u039D': 'N', '\u039F': 'O', '\u03A1': 'P', '\u03A4': 'T',
+  '\u03A5': 'Y', '\u03A7': 'X', '\u03BF': 'o', '\u03B1': 'a',
+  // Other lookalikes
+  '\u0501': 'd', '\u0405': 'S', '\u0406': 'I', '\u0408': 'J',
+  '\u04AE': 'Y', '\u2C7C': 'j',
+};
 
 // ── Stripper / Obfuscator ───────────────────────────────────────
 
@@ -17,6 +100,11 @@ export interface StripperOptions {
   normalizeLineEndings: boolean;
   trimTrailingWhitespace: boolean;
   collapseMultipleBlankLines: boolean;
+  // watermark-cleaner additions
+  stripInvisibleChars: boolean;
+  normalizeTypography: boolean;
+  detectHomoglyphs: boolean;
+  stripBidiControls: boolean;
 }
 
 export const STRIPPER_PRESETS: Record<string, Partial<StripperOptions>> = {
@@ -32,10 +120,23 @@ export const STRIPPER_PRESETS: Record<string, Partial<StripperOptions>> = {
     stripLineNumbers: true,
     stripBom: true,
     stripNonPrintable: true,
+    stripInvisibleChars: true,
+    normalizeTypography: true,
     normalizeWhitespace: true,
     normalizeLineEndings: true,
     trimTrailingWhitespace: true,
     collapseMultipleBlankLines: true,
+  },
+  publish: {
+    stripInvisibleChars: true,
+    normalizeTypography: true,
+    detectHomoglyphs: true,
+    stripBidiControls: true,
+    stripBom: true,
+    stripNonPrintable: true,
+    normalizeWhitespace: true,
+    normalizeLineEndings: true,
+    trimTrailingWhitespace: true,
   },
   full: {
     anonymizeNames: true,
@@ -47,6 +148,10 @@ export const STRIPPER_PRESETS: Record<string, Partial<StripperOptions>> = {
     stripLineNumbers: true,
     stripBom: true,
     stripNonPrintable: true,
+    stripInvisibleChars: true,
+    normalizeTypography: true,
+    detectHomoglyphs: true,
+    stripBidiControls: true,
     normalizeWhitespace: true,
     normalizeLineEndings: true,
     trimTrailingWhitespace: true,
@@ -68,6 +173,10 @@ export const STRIPPER_DEFAULTS: StripperOptions = {
   normalizeLineEndings: false,
   trimTrailingWhitespace: false,
   collapseMultipleBlankLines: false,
+  stripInvisibleChars: false,
+  normalizeTypography: false,
+  detectHomoglyphs: false,
+  stripBidiControls: false,
 };
 
 export function applyStripper(text: string, opts: StripperOptions): string {
@@ -75,6 +184,18 @@ export function applyStripper(text: string, opts: StripperOptions): string {
 
   // BOM first (before anything else reads it)
   if (opts.stripBom) result = result.replace(/^\uFEFF/, '');
+
+  // Invisible characters (watermark-cleaner rules)
+  if (opts.stripInvisibleChars) result = removeInvisibleChars(result);
+
+  // Bidi controls (Trojan Source defense)
+  if (opts.stripBidiControls) result = removeBidiControls(result);
+
+  // Typography normalization (smart quotes, dashes, ellipsis)
+  if (opts.normalizeTypography) result = normalizeTypography(result);
+
+  // Homoglyph replacement (Cyrillic/Greek lookalikes)
+  if (opts.detectHomoglyphs) result = replaceHomoglyphs(result);
 
   // Line endings
   if (opts.normalizeLineEndings) result = result.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -173,6 +294,117 @@ function anonymizeNames(text: string): string {
   });
 }
 
+// ── Invisible Character Removal (watermark-cleaner rules) ───────
+
+function removeInvisibleChars(text: string): string {
+  let result = text;
+
+  // Remove always-invisible characters
+  for (const ch of INVISIBLE_CHARS_ALWAYS_REMOVE) {
+    result = result.replaceAll(ch, '');
+  }
+
+  // Remove invisible character ranges
+  for (const range of INVISIBLE_CHARS_RANGES) {
+    const start = parseInt(range.from, 16);
+    const end = parseInt(range.to, 16);
+    const regex = new RegExp(`[${String.fromCodePoint(start)}-${String.fromCodePoint(end)}]`, 'g');
+    result = result.replace(regex, '');
+  }
+
+  // Replace exotic spaces with normal space
+  for (const sp of EXOTIC_SPACES) {
+    result = result.replaceAll(sp, ' ');
+  }
+
+  // Collapse multiple spaces created by removals
+  result = result.replace(/ {2,}/g, ' ');
+
+  return result;
+}
+
+// ── Bidi Control Removal (Trojan Source defense) ────────────────
+
+function removeBidiControls(text: string): string {
+  let result = text;
+
+  for (const ch of BIDI_CHARS) {
+    result = result.replaceAll(ch, '');
+  }
+
+  for (const range of BIDI_CONTROL_RANGES) {
+    const start = parseInt(range.from, 16);
+    const end = parseInt(range.to, 16);
+    const regex = new RegExp(`[${String.fromCodePoint(start)}-${String.fromCodePoint(end)}]`, 'g');
+    result = result.replace(regex, '');
+  }
+
+  return result;
+}
+
+// ── Typography Normalization (watermark-cleaner rules) ──────────
+
+function normalizeTypography(text: string): string {
+  let result = text;
+
+  // Smart quotes → ASCII
+  for (const [smart, ascii] of Object.entries(SMART_QUOTES)) {
+    result = result.replaceAll(smart, ascii);
+  }
+
+  // Punctuation normalization (ellipsis, bullets, etc.)
+  for (const [unicode, ascii] of Object.entries(PUNCTUATION_NORMALIZE)) {
+    result = result.replaceAll(unicode, ascii);
+  }
+
+  // Em dash (—) and en dash (–) → comma or hyphen per context
+  // Spaced em/en dash → comma: "fast — slow" → "fast, slow"
+  result = result.replace(/\s+[—–]\s+/g, ', ');
+  // Unspaced em/en dash → hyphen
+  result = result.replace(/[—–]/g, '-');
+
+  return result;
+}
+
+// ── Homoglyph Detection ─────────────────────────────────────────
+
+export interface HomoglyphResult {
+  found: boolean;
+  replacements: Array<{ original: string; replacement: string; position: number }>;
+  summary: string;
+}
+
+export function detectHomoglyphs(text: string): HomoglyphResult {
+  const replacements: Array<{ original: string; replacement: string; position: number }> = [];
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (HOMOGLYPHS[ch]) {
+      replacements.push({
+        original: ch,
+        replacement: HOMOGLYPHS[ch],
+        position: i,
+      });
+    }
+  }
+
+  return {
+    found: replacements.length > 0,
+    replacements,
+    summary: replacements.length > 0
+      ? `Found ${replacements.length} homoglyph(s): ${[...new Set(replacements.map(r => `${r.original}→${r.replacement}`))].join(', ')}`
+      : 'No homoglyphs detected',
+  };
+}
+
+export function replaceHomoglyphs(text: string): string {
+  let result = text;
+  for (const [unicode, ascii] of Object.entries(HOMOGLYPHS)) {
+    result = result.replaceAll(unicode, ascii);
+  }
+  return result;
+}
+
 // ── Unsloper ─────────────────────────────────────────────────────
 
 export interface UnslopResult {
@@ -191,23 +423,68 @@ export interface UnslopPattern {
 }
 
 // Phrase → replacement map (lowercase keys)
+// Merged from watermark-cleaner/rules/phrases.json + our own extensions
 const UNSLOP_REPLACEMENTS: Record<string, string> = {
-  // Throat-clearing openers
+  // Throat-clearing openers (watermark-cleaner + custom)
   'it is important to note': '',
   'it is worth noting': '',
+  'it\'s important to note': '',
+  'it\'s worth noting': '',
+  'it bears mentioning': '',
   'it is crucial to understand': '',
   'it goes without saying': '',
   'needless to say': '',
   'without further ado': '',
   'in today\'s world': '',
+  'in today\'s fast-paced world': '',
+  'in today\'s digital age': '',
+  'in the ever-evolving landscape': '',
   'in the realm of': '',
+  'at the heart of': '',
   'in this essay': '',
   'this article will': '',
   'as we delve': '',
   'let us delve': '',
   'buckle up': '',
   'dive deep': '',
+  'dive into': '',
+  'dive in': '',
+  'let\'s dive in': '',
+  'let\'s explore': '',
+  'let\'s unpack': '',
+  'take a closer look': '',
   'at the end of the day': '',
+  'in conclusion': '',
+  'in summary': '',
+  'when it comes to': '',
+
+  // Navigation phrases (watermark-cleaner)
+  'navigate the landscape of': '',
+  'navigate the world of': '',
+  'navigate the complexities of': '',
+
+  // Journey / unlock phrases (watermark-cleaner)
+  'embark on a journey': '',
+  'unlock the secrets': '',
+  'unlock the power': '',
+  'unlock the potential': '',
+  'master the art of': '',
+  'push the boundaries': '',
+  'break new ground': '',
+  'paving the way': '',
+  'breaking barriers': '',
+
+  // Treasure / tapestry / beacon (watermark-cleaner)
+  'a treasure trove of': '',
+  'a tapestry of': '',
+  'a testament to': '',
+  'a myriad of': '',
+  'a plethora of': '',
+  'beacon of': '',
+  'rich tapestry': '',
+  'at the forefront of': '',
+  'fostering a culture of': '',
+  'demystify': '',
 
   // Filler transitions
   'furthermore': '',
@@ -219,18 +496,28 @@ const UNSLOP_REPLACEMENTS: Record<string, string> = {
   'nonetheless': '',
   'accordingly': '',
   'subsequently': '',
+  'indeed': '',
+  'in essence': '',
+  'that said': '',
 
   // Inflated importance
   'game changer': 'significant change',
+  'game-changer': 'significant change',
+  'game-changing': 'significant',
   'holistic approach': 'comprehensive approach',
   'synergy': 'coordination',
   'leverage': 'use',
   'paradigm shift': 'change',
   'cutting edge': 'latest',
+  'cutting-edge': 'latest',
   'state of the art': 'modern',
+  'revolutionize the way': 'change how',
+  'constantly evolving': 'changing',
 
   // Verbose → direct
   'serves as a testament to': 'shows',
+  'serves as a reminder': 'reminds us',
+  'stands as a testament': 'shows',
   'stands as a reminder': 'reminds us',
   'plays a crucial role': 'matters',
   'plays a pivotal role': 'matters',
@@ -250,6 +537,10 @@ const UNSLOP_REPLACEMENTS: Record<string, string> = {
   'focal point': 'focus',
   'indelible mark': 'lasting effect',
   'deeply rooted': 'established',
+  'designed to enhance': 'improves',
+  'whether you\'re a beginner or a seasoned pro': '',
+  'you\'re not alone': '',
+  'imagine a world where': '',
 
   // Highlighting/ensuring
   'highlighting the': 'showing the',
@@ -266,12 +557,13 @@ const UNSLOP_REPLACEMENTS: Record<string, string> = {
   'align with': 'match',
   'resonate with': 'connect with',
 
-  // Verbose single words
+  // Verbose single words (watermark-cleaner lexicon + custom)
   'boasts': 'has',
   'bolstered': 'strengthened',
   'crucial': 'important',
   'deep dive': 'look',
   'delve': 'look',
+  'delve into': 'look at',
   'emphasizing': 'showing',
   'enduring': 'lasting',
   'enhance': 'improve',
@@ -290,6 +582,42 @@ const UNSLOP_REPLACEMENTS: Record<string, string> = {
   'testament': 'proof',
   'underscore': 'show',
   'vibrant': 'active',
+  'unveil': 'reveal',
+  'unleash': 'release',
+  'harness': 'use',
+  'elevate': 'raise',
+  'illuminate': 'show',
+  'traverse': 'cross',
+  'redefine': 'change',
+  'transcend': 'go beyond',
+  'captivate': 'engage',
+  'exemplify': 'show',
+  'encompass': 'include',
+  'garner': 'get',
+  'seamless': 'smooth',
+  'innovative': 'new',
+  'comprehensive': 'complete',
+  'multifaceted': 'complex',
+  'nuanced': 'subtle',
+  'profound': 'deep',
+  'transformative': 'powerful',
+  'remarkable': 'notable',
+  'dynamic': 'active',
+  'ever-evolving': 'changing',
+  'bespoke': 'custom',
+  'curated': 'selected',
+  'synergy': 'coordination',
+  'underpinnings': 'foundation',
+  'ecosystem': 'system',
+  'paradigm': 'model',
+  'cornerstone': 'foundation',
+  'hallmark': 'sign',
+  'mosaic': 'mix',
+  'utilize': 'use',
+  'streamline': 'simplify',
+  'operationalize': 'implement',
+  'ideate': ' brainstorm',
+  'poised to': 'ready to',
 
   // Structural
   'despite its': 'although it',
@@ -325,7 +653,6 @@ const UNSLOP_REPLACEMENTS: Record<string, string> = {
   'groundbreaking': 'new',
   'renowned': 'well-known',
   'featuring diverse array': 'with many',
-  'profound': 'deep',
   'showcasing': 'showing',
 };
 
@@ -383,6 +710,33 @@ export function detectUnslopPatterns(text: string): UnslopPattern[] {
       replacement: '(remove)',
       count: dashSepCount,
     });
+  }
+
+  // Sentence shapes (from watermark-cleaner)
+  const sentenceShapes: Array<{ id: string; regex: RegExp; example: string }> = [
+    { id: 'this-isnt-this-is', regex: /this\s+is\s?n['']?t\b[^.!?]{0,80}[.!?]\s+this\s+is\b/gi, example: "This isn't a tool. This is a movement." },
+    { id: 'its-not-just-its-about', regex: /it['']?s\s+not\s+just\s+about\b[^.!?]{0,80},\s*it['']?s\s+about\b/gi, example: "It's not just about code, it's about craft." },
+    { id: 'its-not-just-its-also', regex: /it['']?s\s+not\s+just\b[^.!?]{0,80},\s*it['']?s\s+also\b/gi, example: "It's not just planning, it's also psychology." },
+    { id: 'not-only-but-also', regex: /\bnot\s+only\b[^.!?]{0,80}\bbut\s+also\b/gi, example: "Not only fast, but also reliable." },
+    { id: 'stop-thinking-start-thinking', regex: /\bstop\s+thinking\b[^.!?]{0,60}(?:[.!?]\s+[^.!?]{0,60})?\bstart\s+thinking\b/gi, example: "Stop thinking features. Start thinking jobs." },
+    { id: 'is-dead-is-the-future', regex: /\bis\s+dead\b[^.!?]{0,60}(?:[.!?]\s+[^.!?]{0,60})?\bis\s+the\s+future\b/gi, example: "Agile is dead. Flow is the future." },
+    { id: 'the-question-isnt', regex: /the\s+question\s+is\s?n['']?t\b[^.!?]{0,80}(?:[.!?]\s+[^.!?]{0,80})?the\s+question\s+is\b/gi, example: "The question isn't how. The question is why." },
+    { id: 'you-dont-need-you-need', regex: /\byou\s+do\s?n['']?t\s+need\b[^.!?]{0,60}(?:[.!?]\s+[^.!?]{0,60})?\byou\s+need\b/gi, example: "You don't need more tools. You need focus." },
+    { id: 'isnt-merely-its', regex: /is\s?n['']?t\s+merely\b[^.!?]{0,80}it['']?s\b/gi, example: "This isn't merely a method, it's a worldview." },
+    { id: 'this-is-where-comes-in', regex: /this\s+is\s+where\b[^.!?]{0,60}\bcomes\s+in\b/gi, example: "This is where user story mapping comes in." },
+    { id: 'less-x-more-y', regex: /\bless\s+\w+,\s+more\s+\w+\b/gi, example: "Less talking, more shipping." },
+  ];
+
+  for (const shape of sentenceShapes) {
+    const matches = text.match(shape.regex);
+    if (matches && matches.length > 0) {
+      patterns.push({
+        phrase: `sentence shape: ${shape.id} (${matches[0].slice(0, 60)}…)`,
+        category: 'sentence shape',
+        replacement: 'rewrite needed',
+        count: matches.length,
+      });
+    }
   }
 
   return patterns;
@@ -450,13 +804,14 @@ export function applyUnslop(text: string, patterns?: UnslopPattern[]): UnslopRes
 }
 
 function categorizePhrase(phrase: string): string {
-  if (['furthermore', 'moreover', 'additionally', 'consequently', 'nevertheless', 'nonetheless', 'accordingly', 'subsequently'].includes(phrase)) return 'transition';
-  if (['leverage', 'utilize', 'boasts', 'bolstered', 'delve', 'showcase', 'tapestry', 'robust', 'pivotal', 'landscape', 'intricate'].includes(phrase)) return 'verbose synonym';
-  if (['game changer', 'holistic approach', 'synergy', 'paradigm shift', 'cutting edge', 'state of the art'].includes(phrase)) return 'buzzword';
-  if (['serves as a testament', 'plays a crucial role', 'underscores its importance', 'setting the stage for'].includes(phrase)) return 'inflated importance';
-  if (['i hope this helps', 'of course!', 'certainly!', 'would you like', 'is there anything else'].includes(phrase)) return 'chatbot';
-  if (['adheres to', 'streamlined', 'in compliance with', 'encyclopedic tone'].includes(phrase)) return 'encyclopedia';
-  if (['groundbreaking', 'renowned', 'featuring diverse array', 'exemplifies commitment to'].includes(phrase)) return 'marketing';
+  if (['furthermore', 'moreover', 'additionally', 'consequently', 'nevertheless', 'nonetheless', 'accordingly', 'subsequently', 'indeed', 'in essence', 'that said'].includes(phrase)) return 'transition';
+  if (['leverage', 'utilize', 'boasts', 'bolstered', 'delve', 'showcase', 'tapestry', 'robust', 'pivotal', 'landscape', 'intricate', 'unveil', 'unleash', 'harness', 'elevate', 'illuminate', 'transcend', 'captivate', 'seamless', 'innovative', 'comprehensive', 'multifaceted', 'nuanced', 'profound', 'dynamic', 'bespoke', 'curated', 'ecosystem', 'paradigm', 'cornerstone', 'hallmark', 'streamline', 'utilize', 'poised to'].includes(phrase)) return 'verbose synonym';
+  if (['game changer', 'game-changer', 'game-changing', 'holistic approach', 'synergy', 'paradigm shift', 'cutting edge', 'cutting-edge', 'state of the art', 'revolutionize the way', 'constantly evolving'].includes(phrase)) return 'buzzword';
+  if (['serves as a testament', 'serves as a reminder', 'stands as a testament', 'stands as a reminder', 'plays a crucial role', 'plays a pivotal role', 'plays a vital role', 'plays a significant role', 'plays a key role', 'underscores its importance', 'underscores its significance', 'setting the stage for', 'a testament to', 'at the forefront of'].includes(phrase)) return 'inflated importance';
+  if (['i hope this helps', 'of course!', 'certainly!', 'would you like', 'is there anything else', 'let me know', 'imagine a world where', 'you\'re not alone'].includes(phrase)) return 'chatbot';
+  if (['adheres to', 'streamlined', 'in compliance with', 'encyclopedic tone', 'ensured that', 'complies with'].includes(phrase)) return 'encyclopedia';
+  if (['groundbreaking', 'renowned', 'featuring diverse array', 'exemplifies commitment to', 'boasts a vibrant', 'nestled in the heart of', 'natural beauty'].includes(phrase)) return 'marketing';
+  if (['in today\'s fast-paced world', 'in today\'s digital age', 'in the ever-evolving landscape', 'navigate the landscape of', 'navigate the world of', 'navigate the complexities of', 'embark on a journey', 'unlock the secrets', 'unlock the power', 'unlock the potential', 'master the art of', 'push the boundaries', 'break new ground', 'paving the way', 'breaking barriers', 'a treasure trove of', 'a tapestry of', 'a myriad of', 'a plethora of', 'beacon of', 'rich tapestry', 'fostering a culture of', 'demystify', 'without further ado', 'buckle up'].includes(phrase)) return 'AI pattern';
   return 'other';
 }
 
