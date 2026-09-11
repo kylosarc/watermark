@@ -9,3 +9,6 @@ coverage
 .vitest
 *.tsbuildinfo
 *.tsbuildinfo
+
+.tmp/
+web_ui/
