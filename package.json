@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@contentauth/c2pa-web": "^0.14.5",
+    "@fefeding/ppt-parser": "^1.0.11",
     "@fontsource/geist": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "lucide-react": "^1.43.0",
+    "pdfjs-dist": "^5.6.205",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

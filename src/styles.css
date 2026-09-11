@@ -4038,8 +4038,487 @@ pre {
   border: 1px solid rgba(244, 63, 94, 0.3);
 }
 
+/* ── Text Batch Multi-File List ─────────────────────────────── */
+
+.txt-batch {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.txt-drop-inline {
+  border: 1px dashed rgba(61, 73, 76, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.txt-drop-inline:hover {
+  border-color: var(--color-primary);
+  background: rgba(76, 215, 246, 0.03);
+}
+
+.txt-drop-inline .txt-drop-inner {
+  padding: 20px 16px;
+  gap: 6px;
+}
+
+.txt-drop-inline .txt-drop-inner strong {
+  font-size: 0.8125rem;
+}
+
+.txt-drop-inline .txt-drop-inner span {
+  font-size: 0.6875rem;
+}
+
+.txt-drop.drag-over {
+  border-color: var(--color-primary);
+  background: rgba(76, 215, 246, 0.06);
+}
+
+.txt-drop-inline.drag-over {
+  border-color: var(--color-primary);
+  background: rgba(76, 215, 246, 0.06);
+}
+
+.txt-batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.txt-batch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(18, 20, 23, 0.5);
+  border: 1px solid rgba(61, 73, 76, 0.2);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.txt-batch-item:hover {
+  border-color: rgba(76, 215, 246, 0.3);
+  background: rgba(76, 215, 246, 0.04);
+}
+
+.txt-batch-item.selected {
+  border-color: var(--color-primary);
+  background: rgba(76, 215, 246, 0.08);
+}
+
+.txt-batch-item.error {
+  border-color: rgba(244, 63, 94, 0.4);
+}
+
+.txt-batch-item-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.txt-batch-item-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.txt-batch-item-status {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.txt-batch-item-status.pending {
+  color: var(--color-outline);
+}
+
+.txt-batch-item-status.analyzing {
+  color: var(--color-primary);
+}
+
+.txt-batch-item-status.error {
+  color: #f43f5e;
+}
+
+.txt-batch-item-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+}
+
+.txt-batch-item-meta {
+  font-size: 0.6875rem;
+  color: var(--color-outline);
+  flex-shrink: 0;
+}
+
+.txt-batch-item-format {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--color-secondary);
+  background: rgba(208, 188, 255, 0.1);
+  border: 1px solid rgba(208, 188, 255, 0.2);
+  border-radius: 3px;
+  padding: 1px 5px;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.txt-batch-item-remove {
+  background: none;
+  border: none;
+  color: var(--color-outline);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.txt-batch-item-remove:hover {
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.1);
+}
+
+.txt-batch-summary {
+  margin-top: 4px;
+}
+
+/* ── Text Sub-Tabs ─────────────────────────────────────────────── */
+
+.txt-subtabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(18, 20, 23, 0.6);
+  border: 1px solid rgba(61, 73, 76, 0.2);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.txt-subtab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--color-outline);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.txt-subtab:hover {
+  color: var(--color-on-surface);
+  background: rgba(76, 215, 246, 0.06);
+}
+
+.txt-subtab.active {
+  color: var(--color-primary);
+  background: rgba(76, 215, 246, 0.1);
+}
+
+/* ── Transform Panel ────────────────────────────────────────────── */
+
+.xform-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.xform-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(18, 20, 23, 0.6);
+  border: 1px solid rgba(61, 73, 76, 0.2);
+  border-radius: 8px;
+}
+
+.xform-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--color-outline);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.xform-tab:hover {
+  color: var(--color-on-surface);
+  background: rgba(76, 215, 246, 0.06);
+}
+
+.xform-tab.active {
+  color: var(--color-primary);
+  background: rgba(76, 215, 246, 0.1);
+}
+
+.xform-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Presets */
+.xform-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.xform-presets-label {
+  font-size: 0.6875rem;
+  color: var(--color-outline);
+  font-weight: 500;
+}
+
+.xform-preset-btn {
+  font-size: 0.6875rem !important;
+  padding: 3px 10px !important;
+  text-transform: capitalize;
+}
+
+/* Options grid */
+.xform-opts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+}
+
+.xform-opts h4 {
+  grid-column: 1 / -1;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-on-surface-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 8px 0 2px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(61, 73, 76, 0.2);
+}
+
+.xform-opts h4:first-child {
+  margin-top: 0;
+}
+
+.xform-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--color-on-surface);
+  cursor: pointer;
+  padding: 3px 0;
+}
+
+.xform-check input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.xform-run {
+  align-self: flex-start;
+}
+
+/* Unsloper results */
+.xform-unslop-intro p {
+  font-size: 0.75rem;
+  color: var(--color-on-surface-dim);
+  line-height: 1.5;
+}
+
+.xform-unslop-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.xform-unslop-summary {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.xform-unslop-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.xform-unslop-stat span {
+  font-size: 0.625rem;
+  color: var(--color-outline);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.xform-unslop-stat strong {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.xform-unslop-cats {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.xform-unslop-cat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  color: var(--color-on-surface-dim);
+  background: rgba(18, 20, 23, 0.6);
+  border: 1px solid rgba(61, 73, 76, 0.2);
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
+.xform-unslop-cat strong {
+  color: var(--color-primary);
+}
+
+.xform-unslop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid rgba(61, 73, 76, 0.2);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.xform-unslop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.xform-unslop-item:hover {
+  background: rgba(76, 215, 246, 0.04);
+}
+
+.xform-unslop-phrase {
+  color: var(--color-on-surface);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6875rem;
+}
+
+.xform-unslop-cat-badge {
+  font-size: 0.5625rem;
+  color: var(--color-secondary);
+  background: rgba(208, 188, 255, 0.1);
+  border: 1px solid rgba(208, 188, 255, 0.2);
+  border-radius: 3px;
+  padding: 1px 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.xform-unslop-count {
+  color: var(--color-outline);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6875rem;
+}
+
+.xform-unslop-arrow {
+  color: var(--color-outline);
+}
+
+.xform-unslop-replace {
+  color: var(--color-tertiary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6875rem;
+}
+
+/* Output */
+.xform-output {
+  border: 1px solid rgba(61, 73, 76, 0.3);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.xform-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(18, 20, 23, 0.6);
+  border-bottom: 1px solid rgba(61, 73, 76, 0.2);
+}
+
+.xform-output-header h4 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.xform-output-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.xform-output-text {
+  width: 100%;
+  padding: 12px;
+  background: rgba(18, 20, 23, 0.4);
+  color: var(--color-on-surface);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  border: none;
+  resize: vertical;
+}
+
+.xform-output-text:focus {
+  outline: none;
+}
+
 @media (max-width: 768px) {
   .txt-sim-grid {
     grid-template-columns: 1fr;
+  }
+  .txt-batch-item-meta {
+    display: none;
+  }
+  .xform-opts {
+    grid-template-columns: 1fr;
+  }
+  .xform-unslop-summary {
+    gap: 12px;
   }
 }

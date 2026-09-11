@@ -2,6 +2,22 @@
   <img src="public/logo.svg" alt="Watermark" width="320">
 </p>
 
+<p align="center">
+  <a href="https://github.com/kylosarc/watermark/blob/main/docs/index.html"><img src="https://img.shields.io/badge/Docs-Help%20Guide-4cd7f6?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Docs"/></a>
+  <a href="https://github.com/kylosarc/watermark"><img src="https://img.shields.io/badge/GitHub-Source-333?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"/></a>
+  <a href="http://localhost:5173"><img src="https://img.shields.io/badge/Launch-Local%20Dev-4edea3?style=for-the-badge&logo=vite&logoColor=white" alt="Launch Dev"/></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19"/>
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 5"/>
+  <img src="https://img.shields.io/badge/C2PA-0.14.5-4cd7f6?style=flat-square&logo=contentauthenticityinitiative&logoColor=white" alt="C2PA 0.14.5"/>
+  <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8"/>
+  <img src="https://img.shields.io/badge/Tests-4%20Passing-brightgreen?style=flat-square&logo=jest&logoColor=white" alt="Tests Passing"/>
+</p>
+
+---
+
 # Watermark
 
 Watermark is a local-first web application for inspecting C2PA Content Credentials and understanding media provenance. The first release verifies media in the browser, computes a SHA-256 digest, distinguishes valid signatures from trusted issuers, and displays manifest lineage without uploading the asset.

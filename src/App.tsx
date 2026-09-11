@@ -50,6 +50,12 @@ import {
 import { verifyFile } from './lib/c2pa';
 import { errorResult } from './lib/verification';
 import { formatBytes, sha256Hex } from './lib/file';
+import { extractTextFromFile, TEXT_ACCEPT, detectFormat } from './lib/extract';
+import {
+  applyStripper, STRIPPER_DEFAULTS, STRIPPER_PRESETS,
+  detectUnslopPatterns, applyUnslop,
+  type StripperOptions, type UnslopPattern,
+} from './lib/transform';
 import type { ManifestSummary, ValidationCode, VerificationResult, VerificationStatus } from './lib/types';
 import './styles.css';
 
@@ -1986,26 +1992,37 @@ function analyzeText(text: string): TextAnalysis {
   };
 }
 
-interface TextSlot {
-  source: 'file' | 'paste' | null;
+interface TextItem {
+  id: number;
+  source: 'file' | 'paste';
   fileName: string | null;
   content: string;
   c2paResult: VerificationResult | null;
   sha256: string;
   analysis: TextAnalysis | null;
-  status: 'empty' | 'analyzing' | 'done';
+  status: 'pending' | 'analyzing' | 'done' | 'error';
+  format?: string;
 }
 
+let textIdCounter = 0;
+
 function TextView({ showToast }: { showToast: (msg: string) => void }) {
-  const [slot, setSlot] = useState<TextSlot>({
-    source: null, fileName: null, content: '', c2paResult: null, sha256: '', analysis: null, status: 'empty',
-  });
+  const [items, setItems] = useState<TextItem[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pasteText, setPasteText] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // Text simulator state
   const [textSimResults, setTextSimResults] = useState<{ name: string; description: string; hash: string; preserved: boolean }[]>([]);
   const [textSimRunning, setTextSimRunning] = useState(false);
+
+  // Sub-tab for detail panel
+  type TextSubTab = 'analysis' | 'transform';
+  const [subTab, setSubTab] = useState<TextSubTab>('analysis');
+
+  const selectedItem = items.find((it) => it.id === selectedId) ?? null;
 
   async function hashText(text: string): Promise<string> {
     const encoder = new TextEncoder();
@@ -2015,12 +2032,163 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   }
 
+  async function processOne(text: string, source: 'file' | 'paste', fileName: string | null): Promise<TextItem> {
+    const id = ++textIdCounter;
+
+    // SHA-256
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+    const analysis = analyzeText(text);
+
+    let c2paResult: VerificationResult | null = null;
+    if (source === 'file' && fileName) {
+      try {
+        const blob = new Blob([text], { type: 'text/plain' });
+        const file = new File([blob], fileName, { type: 'text/plain' });
+        c2paResult = await verifyFile(file);
+      } catch {
+        // Text files may not have C2PA
+      }
+    }
+
+    return { id, source, fileName, content: text, c2paResult, sha256, analysis, status: 'done', format: detectFormat(fileName ?? '') };
+  }
+
+  async function processFiles(files: FileList | File[]) {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+    setIsProcessing(true);
+
+    const placeholders: TextItem[] = fileArray.map((f) => ({
+      id: ++textIdCounter,
+      source: 'file' as const,
+      fileName: f.name,
+      content: '',
+      c2paResult: null,
+      sha256: '',
+      analysis: null,
+      status: 'pending' as const,
+      format: detectFormat(f.name),
+    }));
+
+    setItems((prev) => [...prev, ...placeholders]);
+
+    // Process sequentially so progress updates are visible
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i];
+      const ph = placeholders[i];
+
+      // Mark as analyzing
+      setItems((prev) => prev.map((it) => it.id === ph.id ? { ...it, status: 'analyzing' } : it));
+
+      try {
+        const extracted = await extractTextFromFile(file);
+        const result = await processOne(extracted.text, 'file', file.name);
+        setItems((prev) => prev.map((it) => it.id === ph.id ? { ...result } : it));
+      } catch {
+        setItems((prev) => prev.map((it) => it.id === ph.id ? { ...it, status: 'error' as const } : it));
+      }
+    }
+
+    setIsProcessing(false);
+    showToast(`${fileArray.length} file${fileArray.length > 1 ? 's' : ''} analyzed`);
+  }
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    void processFiles(files);
+    e.target.value = '';
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    dropZoneRef.current?.classList.remove('drag-over');
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    void processFiles(files);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    dropZoneRef.current?.classList.add('drag-over');
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    if (e.currentTarget === e.target) dropZoneRef.current?.classList.remove('drag-over');
+  }
+
+  async function handlePasteAnalysis() {
+    if (!pasteText.trim()) return;
+    setIsProcessing(true);
+    const result = await processOne(pasteText, 'paste', null);
+    result.format = 'text';
+    setItems((prev) => [...prev, result]);
+    setPasteText('');
+    setIsProcessing(false);
+    showToast('Pasted text analyzed');
+  }
+
+  function removeItem(id: number) {
+    setItems((prev) => prev.filter((it) => it.id !== id));
+    if (selectedId === id) setSelectedId(null);
+  }
+
+  function clearAll() {
+    setItems([]);
+    setSelectedId(null);
+    setPasteText('');
+    setTextSimResults([]);
+    showToast('Cleared');
+  }
+
+  function exportAll() {
+    if (items.length === 0) return;
+    const report = items.filter((it) => it.analysis).map((it) => ({
+      source: it.source,
+      fileName: it.fileName,
+      sha256: it.sha256,
+      stats: {
+        charCount: it.analysis!.charCount,
+        wordCount: it.analysis!.wordCount,
+        sentenceCount: it.analysis!.sentenceCount,
+        paragraphCount: it.analysis!.paragraphCount,
+        lineCount: it.analysis!.lineCount,
+        avgWordLength: it.analysis!.avgWordLength,
+        avgSentenceLength: it.analysis!.avgSentenceLength,
+      },
+      aiDetection: {
+        confidence: it.analysis!.aiConfidence,
+        signals: it.analysis!.aiSignals,
+        vocabularyRichness: it.analysis!.vocabularyRichness,
+        repetitionScore: it.analysis!.repetitionScore,
+        burstiness: it.analysis!.burstiness,
+      },
+      topWords: it.analysis!.topWords,
+    }));
+    const json = JSON.stringify(report.length === 1 ? report[0] : report, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `text-analysis-${items.length > 1 ? 'batch' : (items[0]?.fileName ?? 'paste')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Report exported');
+  }
+
   async function runTextSimulations() {
-    if (!slot.content) return;
+    const item = selectedItem;
+    if (!item?.content) return;
     setTextSimRunning(true);
     setTextSimResults([]);
 
-    const originalHash = slot.sha256;
+    const originalHash = item.sha256;
     const ops: { name: string; description: string; transform: (t: string) => string }[] = [
       { name: 'Line Endings (LF → CRLF)', description: 'Convert Unix to Windows line endings', transform: (t) => t.replace(/\n/g, '\r\n') },
       { name: 'Line Endings (CRLF → LF)', description: 'Convert Windows to Unix line endings', transform: (t) => t.replace(/\r\n/g, '\n') },
@@ -2041,118 +2209,15 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
     ];
 
     const results: typeof textSimResults = [];
-
     for (const op of ops) {
-      const transformed = op.transform(slot.content);
+      const transformed = op.transform(item.content);
       const hash = await hashText(transformed);
-      results.push({
-        name: op.name,
-        description: op.description,
-        hash,
-        preserved: hash === originalHash,
-      });
+      results.push({ name: op.name, description: op.description, hash, preserved: hash === originalHash });
       setTextSimResults([...results]);
     }
 
     setTextSimRunning(false);
     showToast('Text simulation complete');
-  }
-
-  async function processText(text: string, source: 'file' | 'paste', fileName: string | null) {
-    setSlot({ source, fileName, content: text, c2paResult: null, sha256: '', analysis: null, status: 'analyzing' });
-
-    // SHA-256
-    const encoder = new TextEncoder();
-    const data = encoder.encode(text);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-
-    // Analysis
-    const analysis = analyzeText(text);
-
-    // C2PA verification (for files only)
-    let c2paResult: VerificationResult | null = null;
-    if (source === 'file' && fileName) {
-      try {
-        const blob = new Blob([text], { type: 'text/plain' });
-        const file = new File([blob], fileName, { type: 'text/plain' });
-        c2paResult = await verifyFile(file);
-      } catch {
-        // Text files may not have C2PA
-      }
-    }
-
-    setSlot({ source, fileName, content: text, c2paResult, sha256, analysis, status: 'done' });
-    showToast('Text analysis complete');
-  }
-
-  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      void processText(reader.result as string, 'file', file.name);
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      void processText(reader.result as string, 'file', file.name);
-    };
-    reader.readAsText(file);
-  }
-
-  function handlePasteAnalysis() {
-    if (!pasteText.trim()) return;
-    void processText(pasteText, 'paste', null);
-  }
-
-  function clearAll() {
-    setSlot({ source: null, fileName: null, content: '', c2paResult: null, sha256: '', analysis: null, status: 'empty' });
-    setPasteText('');
-    showToast('Cleared');
-  }
-
-  function exportReport() {
-    if (!slot.analysis) return;
-    const report = {
-      source: slot.source,
-      fileName: slot.fileName,
-      sha256: slot.sha256,
-      stats: {
-        charCount: slot.analysis.charCount,
-        wordCount: slot.analysis.wordCount,
-        sentenceCount: slot.analysis.sentenceCount,
-        paragraphCount: slot.analysis.paragraphCount,
-        lineCount: slot.analysis.lineCount,
-        avgWordLength: slot.analysis.avgWordLength,
-        avgSentenceLength: slot.analysis.avgSentenceLength,
-      },
-      aiDetection: {
-        confidence: slot.analysis.aiConfidence,
-        signals: slot.analysis.aiSignals,
-        vocabularyRichness: slot.analysis.vocabularyRichness,
-        repetitionScore: slot.analysis.repetitionScore,
-        burstiness: slot.analysis.burstiness,
-      },
-      topWords: slot.analysis.topWords,
-    };
-    const json = JSON.stringify(report, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `text-analysis-${slot.fileName ?? 'paste'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('Report exported');
   }
 
   function aiConfidenceColor(c: number) {
@@ -2169,7 +2234,8 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
     return 'Likely AI';
   }
 
-  const a = slot.analysis;
+  const doneItems = items.filter((it) => it.status === 'done' && it.analysis);
+  const isIdle = items.length === 0;
 
   return (
     <main className="txt-view">
@@ -2177,13 +2243,17 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 600, letterSpacing: '-0.02em' }}>Text Analysis</h1>
           <p style={{ fontSize: '0.8125rem', color: 'var(--color-on-surface-dim)', marginTop: 4 }}>
-            Drop a text file or paste content to analyze provenance, integrity, and AI-generation signals.
+            Drop text files or paste content to analyze provenance, integrity, and AI-generation signals.
+            {items.length > 1 && <span style={{ marginLeft: 8, color: 'var(--color-primary)', fontWeight: 600 }}>{items.length} files loaded</span>}
           </p>
         </div>
-        {slot.status === 'done' && (
+        {items.length > 0 && (
           <div className="txt-actions">
-            <button className="action-tactile button-ghost" type="button" onClick={exportReport}>
-              <Download size={15} /> Export
+            <button className="action-tactile button-ghost" type="button" onClick={exportAll} disabled={doneItems.length === 0}>
+              <Download size={15} /> Export {doneItems.length > 1 ? `All (${doneItems.length})` : ''}
+            </button>
+            <button className="action-tactile button-ghost" type="button" onClick={() => fileInputRef.current?.click()} disabled={isProcessing}>
+              <Upload size={15} /> Add Files
             </button>
             <button className="action-tactile button-ghost" type="button" onClick={clearAll}>
               <Trash2 size={15} /> Clear
@@ -2192,21 +2262,23 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
         )}
       </div>
 
-      {slot.status === 'empty' ? (
+      {isIdle ? (
         <>
           {/* File Drop */}
           <div
+            ref={dropZoneRef}
             className="txt-drop"
-            onDragOver={(e) => e.preventDefault()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
           >
             <div className="txt-drop-inner">
               <Upload size={36} style={{ color: 'var(--color-outline)' }} />
-              <strong>Drop a text file</strong>
-              <span>.txt, .md, .json, .html, .csv, .xml, or any text-based format</span>
+              <strong>Drop text files</strong>
+              <span>.txt, .md, .json, .html, .csv, .xml, .py, .ts, .js, .go, .rs, .pdf, .pptx — multiple files supported</span>
             </div>
-            <input ref={fileInputRef} className="visually-hidden" type="file" accept=".txt,.md,.json,.html,.csv,.xml,.yaml,.yml,.toml,.log,.ini,.cfg,.conf,.js,.ts,.py,.go,.rs,.java,.c,.cpp,.h,.rb,.php,.sql,.sh,.bash,.css,.scss" onChange={handleFileInput} />
+            <input ref={fileInputRef} className="visually-hidden" type="file" accept={TEXT_ACCEPT} multiple onChange={handleFileInput} />
           </div>
 
           <div className="txt-divider"><span>or</span></div>
@@ -2224,7 +2296,7 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
               className="action-tactile button-primary"
               type="button"
               onClick={handlePasteAnalysis}
-              disabled={!pasteText.trim()}
+              disabled={!pasteText.trim() || isProcessing}
             >
               <Sparkles size={16} /> Analyze Text
             </button>
@@ -2232,178 +2304,519 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
         </>
       ) : (
         <>
-          {/* Loading */}
-          {slot.status === 'analyzing' && (
+          {/* Loading bar */}
+          {isProcessing && (
             <div className="txt-progress">
               <RefreshCw size={16} className="spin" />
-              <span>Analyzing text...</span>
+              <span>Processing files...</span>
             </div>
           )}
 
-          {/* Results */}
-          {a && (
-            <div className="txt-results">
-              {/* Source Info */}
-              <div className="txt-source">
-                <div className="txt-source-info">
-                  <FileText size={18} style={{ color: 'var(--color-primary)' }} />
-                  <span>{slot.source === 'file' ? slot.fileName : 'Pasted text'}</span>
-                </div>
-                <div className="txt-hash" title={slot.sha256}>
-                  <Fingerprint size={14} />
-                  <span>{slot.sha256.slice(0, 16)}…</span>
-                </div>
+          {/* Batch file list (always visible when items exist) */}
+          <div className="txt-batch">
+            {/* Add more button at top of list */}
+            <div
+              className="txt-drop txt-drop-inline"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <div className="txt-drop-inner">
+                <Upload size={18} style={{ color: 'var(--color-outline)' }} />
+                <strong>Add more files</strong>
+                <span>Drop or click — multiple files supported</span>
               </div>
+              <input ref={fileInputRef} className="visually-hidden" type="file" accept={TEXT_ACCEPT} multiple onChange={handleFileInput} />
+            </div>
 
-              {/* C2PA Status */}
-              {slot.c2paResult && (
-                <div className={`txt-c2pa ${slot.c2paResult.status === 'ready' ? 'has-c2pa' : 'no-c2pa'}`}>
-                  {slot.c2paResult.status === 'ready' ? <ShieldCheck size={18} /> : <ShieldOff size={18} />}
-                  <div>
-                    <strong>{slot.c2paResult.status === 'ready' ? 'C2PA Manifest Found' : 'No C2PA Manifest'}</strong>
-                    <span>{slot.c2paResult.validationState}</span>
+            <div className="txt-batch-list">
+              {items.map((it) => (
+                <div
+                  key={it.id}
+                  className={`txt-batch-item ${selectedId === it.id ? 'selected' : ''} ${it.status}`}
+                  onClick={() => setSelectedId(it.id)}
+                >
+                  <div className="txt-batch-item-main">
+                    <FileText size={16} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+                    <span className="txt-batch-item-name">{it.source === 'file' ? it.fileName : 'Pasted text'}</span>
+                    {it.format && it.format !== 'text' && (
+                      <span className="txt-batch-item-format">{it.format.toUpperCase()}</span>
+                    )}
+                    {it.status === 'pending' && <span className="txt-batch-item-status pending">Queued</span>}
+                    {it.status === 'analyzing' && <span className="txt-batch-item-status analyzing"><RefreshCw size={12} className="spin" /> Analyzing</span>}
+                    {it.status === 'done' && it.analysis && (
+                      <>
+                        <span className="txt-batch-item-badge" style={{ color: aiConfidenceColor(it.analysis.aiConfidence) }}>
+                          AI {it.analysis.aiConfidence}%
+                        </span>
+                        <span className="txt-batch-item-meta">{it.analysis.wordCount.toLocaleString()} words</span>
+                      </>
+                    )}
+                    {it.status === 'error' && <span className="txt-batch-item-status error">Error</span>}
                   </div>
-                </div>
-              )}
-
-              {/* AI Confidence */}
-              <div className="txt-ai">
-                <div className="txt-ai-header">
-                  <Sparkles size={18} style={{ color: aiConfidenceColor(a.aiConfidence) }} />
-                  <div>
-                    <strong>AI Generation Likelihood</strong>
-                    <span>{aiConfidenceLabel(a.aiConfidence)}</span>
-                  </div>
-                  <strong className="txt-ai-score" style={{ color: aiConfidenceColor(a.aiConfidence) }}>{a.aiConfidence}%</strong>
-                </div>
-                <div className="txt-ai-bar">
-                  <div className="txt-ai-fill" style={{ width: `${a.aiConfidence}%`, background: aiConfidenceColor(a.aiConfidence) }} />
-                </div>
-                {a.aiSignals.length > 0 && (
-                  <div className="txt-ai-signals">
-                    {a.aiSignals.map((sig, i) => (
-                      <div key={i} className="txt-ai-signal">
-                        <AlertTriangle size={13} />
-                        <span>{sig}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Stats Grid */}
-              <div className="txt-stats">
-                <h3>Text Statistics</h3>
-                <div className="txt-stats-grid">
-                  <div className="txt-stat"><span>Characters</span><strong>{a.charCount.toLocaleString()}</strong></div>
-                  <div className="txt-stat"><span>Words</span><strong>{a.wordCount.toLocaleString()}</strong></div>
-                  <div className="txt-stat"><span>Sentences</span><strong>{a.sentenceCount.toLocaleString()}</strong></div>
-                  <div className="txt-stat"><span>Paragraphs</span><strong>{a.paragraphCount.toLocaleString()}</strong></div>
-                  <div className="txt-stat"><span>Lines</span><strong>{a.lineCount.toLocaleString()}</strong></div>
-                  <div className="txt-stat"><span>Avg Word Length</span><strong>{a.avgWordLength.toFixed(1)}</strong></div>
-                  <div className="txt-stat"><span>Avg Sentence Length</span><strong>{a.avgSentenceLength.toFixed(1)} words</strong></div>
-                  <div className="txt-stat"><span>Vocabulary Richness</span><strong>{(a.vocabularyRichness * 100).toFixed(1)}%</strong></div>
-                </div>
-              </div>
-
-              {/* Readability Metrics */}
-              <div className="txt-metrics">
-                <h3>Readability Metrics</h3>
-                <div className="txt-metrics-grid">
-                  <div className="txt-metric">
-                    <span>Burstiness</span>
-                    <div className="txt-metric-bar">
-                      <div className="txt-metric-fill" style={{ width: `${a.burstiness}%`, background: a.burstiness > 50 ? 'var(--color-tertiary)' : '#f59e0b' }} />
-                    </div>
-                    <span className="txt-metric-val">{a.burstiness}/100</span>
-                  </div>
-                  <div className="txt-metric">
-                    <span>Sentence Uniformity</span>
-                    <div className="txt-metric-bar">
-                      <div className="txt-metric-fill" style={{ width: `${a.sentenceUniformity}%`, background: a.sentenceUniformity > 70 ? '#f59e0b' : 'var(--color-tertiary)' }} />
-                    </div>
-                    <span className="txt-metric-val">{a.sentenceUniformity}/100</span>
-                  </div>
-                  <div className="txt-metric">
-                    <span>Repetition</span>
-                    <div className="txt-metric-bar">
-                      <div className="txt-metric-fill" style={{ width: `${Math.min(100, a.repetitionScore)}%`, background: a.repetitionScore > 5 ? '#f43f5e' : 'var(--color-tertiary)' }} />
-                    </div>
-                    <span className="txt-metric-val">{a.repetitionScore.toFixed(1)}%</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Top Words */}
-              {a.topWords.length > 0 && (
-                <div className="txt-topwords">
-                  <h3>Top Words</h3>
-                  <div className="txt-topwords-list">
-                    {a.topWords.map(([word, count]) => (
-                      <div key={word} className="txt-topword">
-                        <span className="txt-topword-word">{word}</span>
-                        <span className="txt-topword-count">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* What Would Break? Text Simulator */}
-              <div className="txt-simulator">
-                <div className="txt-sim-header">
-                  <h3>What Would Break This Text?</h3>
                   <button
-                    className="action-tactile button-ghost"
+                    className="txt-batch-item-remove"
                     type="button"
-                    onClick={runTextSimulations}
-                    disabled={textSimRunning || slot.content.length === 0}
+                    onClick={(e) => { e.stopPropagation(); removeItem(it.id); }}
+                    title="Remove"
                   >
-                    {textSimRunning ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
-                    {textSimRunning ? 'Running...' : 'Run Tests'}
+                    <Trash2 size={13} />
                   </button>
                 </div>
+              ))}
+            </div>
+          </div>
 
-                {textSimResults.length > 0 && (
-                  <>
-                    <div className="txt-sim-summary">
-                      <div className="txt-sim-stat preserved">
-                        <CheckCircle2 size={14} />
-                        <strong>{textSimResults.filter((r) => r.preserved).length}</strong>
-                        <span>Preserved</span>
-                      </div>
-                      <div className="txt-sim-stat broken">
-                        <AlertTriangle size={14} />
-                        <strong>{textSimResults.filter((r) => !r.preserved).length}</strong>
-                        <span>Changed</span>
-                      </div>
-                    </div>
+          {/* Detail panel for selected item */}
+          {selectedItem && selectedItem.analysis && (
+            <>
+              {/* Sub-tab bar */}
+              <div className="txt-subtabs">
+                <button
+                  className={`txt-subtab ${subTab === 'analysis' ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setSubTab('analysis')}
+                >
+                  <Info size={14} /> Analysis
+                </button>
+                <button
+                  className={`txt-subtab ${subTab === 'transform' ? 'active' : ''}`}
+                  type="button"
+                  onClick={() => setSubTab('transform')}
+                >
+                  <Sparkles size={14} /> Strip / Unslop
+                </button>
+              </div>
 
-                    <div className="txt-sim-grid">
-                      {textSimResults.map((r) => (
-                        <div key={r.name} className={`txt-sim-card ${r.preserved ? 'preserved' : 'broken'}`}>
-                          <div className="txt-sim-card-status">
-                            {r.preserved ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-                          </div>
-                          <div className="txt-sim-card-info">
-                            <span className="txt-sim-card-name">{r.name}</span>
-                            <span className="txt-sim-card-desc">{r.description}</span>
-                            <span className="txt-sim-card-hash" title={r.hash}>SHA-256: {r.hash.slice(0, 12)}…</span>
-                          </div>
-                          <span className={`txt-sim-badge ${r.preserved ? 'preserved' : 'broken'}`}>
-                            {r.preserved ? 'Same' : 'Different'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+              {subTab === 'analysis' ? (
+                <TextDetailPanel
+                  item={selectedItem}
+                  aiConfidenceColor={aiConfidenceColor}
+                  aiConfidenceLabel={aiConfidenceLabel}
+                  textSimResults={textSimResults}
+                  textSimRunning={textSimRunning}
+                  runTextSimulations={runTextSimulations}
+                />
+              ) : (
+                <TextTransformPanel inputText={selectedItem.content} showToast={showToast} />
+              )}
+            </>
+          )}
+
+          {/* Summary when no item selected but multiple exist */}
+          {!selectedItem && doneItems.length > 1 && (
+            <div className="txt-results txt-batch-summary">
+              <h3>Batch Summary</h3>
+              <div className="txt-stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                <div className="txt-stat"><span>Total Files</span><strong>{doneItems.length}</strong></div>
+                <div className="txt-stat"><span>Total Words</span><strong>{doneItems.reduce((s, it) => s + (it.analysis?.wordCount ?? 0), 0).toLocaleString()}</strong></div>
+                <div className="txt-stat">
+                  <span>Avg AI Score</span>
+                  <strong style={{ color: aiConfidenceColor(doneItems.reduce((s, it) => s + (it.analysis?.aiConfidence ?? 0), 0) / doneItems.length) }}>
+                    {(doneItems.reduce((s, it) => s + (it.analysis?.aiConfidence ?? 0), 0) / doneItems.length).toFixed(0)}%
+                  </strong>
+                </div>
+                <div className="txt-stat">
+                  <span>C2PA Found</span>
+                  <strong>{doneItems.filter((it) => it.c2paResult?.status === 'ready').length}/{doneItems.length}</strong>
+                </div>
               </div>
             </div>
           )}
         </>
       )}
     </main>
+  );
+}
+
+/* ── Text Detail Panel (shown when a single text item is selected) ── */
+
+function TextDetailPanel({
+  item,
+  aiConfidenceColor,
+  aiConfidenceLabel,
+  textSimResults,
+  textSimRunning,
+  runTextSimulations,
+}: {
+  item: TextItem;
+  aiConfidenceColor: (c: number) => string;
+  aiConfidenceLabel: (c: number) => string;
+  textSimResults: { name: string; description: string; hash: string; preserved: boolean }[];
+  textSimRunning: boolean;
+  runTextSimulations: () => void;
+}) {
+  const a = item.analysis!;
+
+  return (
+    <div className="txt-results">
+      {/* Source Info */}
+      <div className="txt-source">
+        <div className="txt-source-info">
+          <FileText size={18} style={{ color: 'var(--color-primary)' }} />
+          <span>{item.source === 'file' ? item.fileName : 'Pasted text'}</span>
+        </div>
+        <div className="txt-hash" title={item.sha256}>
+          <Fingerprint size={14} />
+          <span>{item.sha256.slice(0, 16)}…</span>
+        </div>
+      </div>
+
+      {/* C2PA Status */}
+      {item.c2paResult && (
+        <div className={`txt-c2pa ${item.c2paResult.status === 'ready' ? 'has-c2pa' : 'no-c2pa'}`}>
+          {item.c2paResult.status === 'ready' ? <ShieldCheck size={18} /> : <ShieldOff size={18} />}
+          <div>
+            <strong>{item.c2paResult.status === 'ready' ? 'C2PA Manifest Found' : 'No C2PA Manifest'}</strong>
+            <span>{item.c2paResult.validationState}</span>
+          </div>
+        </div>
+      )}
+
+      {/* AI Confidence */}
+      <div className="txt-ai">
+        <div className="txt-ai-header">
+          <Sparkles size={18} style={{ color: aiConfidenceColor(a.aiConfidence) }} />
+          <div>
+            <strong>AI Generation Likelihood</strong>
+            <span>{aiConfidenceLabel(a.aiConfidence)}</span>
+          </div>
+          <strong className="txt-ai-score" style={{ color: aiConfidenceColor(a.aiConfidence) }}>{a.aiConfidence}%</strong>
+        </div>
+        <div className="txt-ai-bar">
+          <div className="txt-ai-fill" style={{ width: `${a.aiConfidence}%`, background: aiConfidenceColor(a.aiConfidence) }} />
+        </div>
+        {a.aiSignals.length > 0 && (
+          <div className="txt-ai-signals">
+            {a.aiSignals.map((sig, i) => (
+              <div key={i} className="txt-ai-signal">
+                <AlertTriangle size={13} />
+                <span>{sig}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Stats Grid */}
+      <div className="txt-stats">
+        <h3>Text Statistics</h3>
+        <div className="txt-stats-grid">
+          <div className="txt-stat"><span>Characters</span><strong>{a.charCount.toLocaleString()}</strong></div>
+          <div className="txt-stat"><span>Words</span><strong>{a.wordCount.toLocaleString()}</strong></div>
+          <div className="txt-stat"><span>Sentences</span><strong>{a.sentenceCount.toLocaleString()}</strong></div>
+          <div className="txt-stat"><span>Paragraphs</span><strong>{a.paragraphCount.toLocaleString()}</strong></div>
+          <div className="txt-stat"><span>Lines</span><strong>{a.lineCount.toLocaleString()}</strong></div>
+          <div className="txt-stat"><span>Avg Word Length</span><strong>{a.avgWordLength.toFixed(1)}</strong></div>
+          <div className="txt-stat"><span>Avg Sentence Length</span><strong>{a.avgSentenceLength.toFixed(1)} words</strong></div>
+          <div className="txt-stat"><span>Vocabulary Richness</span><strong>{(a.vocabularyRichness * 100).toFixed(1)}%</strong></div>
+        </div>
+      </div>
+
+      {/* Readability Metrics */}
+      <div className="txt-metrics">
+        <h3>Readability Metrics</h3>
+        <div className="txt-metrics-grid">
+          <div className="txt-metric">
+            <span>Burstiness</span>
+            <div className="txt-metric-bar">
+              <div className="txt-metric-fill" style={{ width: `${a.burstiness}%`, background: a.burstiness > 50 ? 'var(--color-tertiary)' : '#f59e0b' }} />
+            </div>
+            <span className="txt-metric-val">{a.burstiness}/100</span>
+          </div>
+          <div className="txt-metric">
+            <span>Sentence Uniformity</span>
+            <div className="txt-metric-bar">
+              <div className="txt-metric-fill" style={{ width: `${a.sentenceUniformity}%`, background: a.sentenceUniformity > 70 ? '#f59e0b' : 'var(--color-tertiary)' }} />
+            </div>
+            <span className="txt-metric-val">{a.sentenceUniformity}/100</span>
+          </div>
+          <div className="txt-metric">
+            <span>Repetition</span>
+            <div className="txt-metric-bar">
+              <div className="txt-metric-fill" style={{ width: `${Math.min(100, a.repetitionScore)}%`, background: a.repetitionScore > 5 ? '#f43f5e' : 'var(--color-tertiary)' }} />
+            </div>
+            <span className="txt-metric-val">{a.repetitionScore.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Words */}
+      {a.topWords.length > 0 && (
+        <div className="txt-topwords">
+          <h3>Top Words</h3>
+          <div className="txt-topwords-list">
+            {a.topWords.map(([word, count]) => (
+              <div key={word} className="txt-topword">
+                <span className="txt-topword-word">{word}</span>
+                <span className="txt-topword-count">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* What Would Break? Text Simulator */}
+      <div className="txt-simulator">
+        <div className="txt-sim-header">
+          <h3>What Would Break This Text?</h3>
+          <button
+            className="action-tactile button-ghost"
+            type="button"
+            onClick={runTextSimulations}
+            disabled={textSimRunning || item.content.length === 0}
+          >
+            {textSimRunning ? <RefreshCw size={14} className="spin" /> : <Play size={14} />}
+            {textSimRunning ? 'Running...' : 'Run Tests'}
+          </button>
+        </div>
+
+        {textSimResults.length > 0 && (
+          <>
+            <div className="txt-sim-summary">
+              <div className="txt-sim-stat preserved">
+                <CheckCircle2 size={14} />
+                <strong>{textSimResults.filter((r) => r.preserved).length}</strong>
+                <span>Preserved</span>
+              </div>
+              <div className="txt-sim-stat broken">
+                <AlertTriangle size={14} />
+                <strong>{textSimResults.filter((r) => !r.preserved).length}</strong>
+                <span>Changed</span>
+              </div>
+            </div>
+
+            <div className="txt-sim-grid">
+              {textSimResults.map((r) => (
+                <div key={r.name} className={`txt-sim-card ${r.preserved ? 'preserved' : 'broken'}`}>
+                  <div className="txt-sim-card-status">
+                    {r.preserved ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                  </div>
+                  <div className="txt-sim-card-info">
+                    <span className="txt-sim-card-name">{r.name}</span>
+                    <span className="txt-sim-card-desc">{r.description}</span>
+                    <span className="txt-sim-card-hash" title={r.hash}>SHA-256: {r.hash.slice(0, 12)}…</span>
+                  </div>
+                  <span className={`txt-sim-badge ${r.preserved ? 'preserved' : 'broken'}`}>
+                    {r.preserved ? 'Same' : 'Different'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Text Transform Panel (Stripper / Unsloper) ─────────────────── */
+
+function TextTransformPanel({ inputText, showToast }: { inputText: string; showToast: (msg: string) => void }) {
+  const [mode, setMode] = useState<'strip' | 'unslop'>('strip');
+  const [outputText, setOutputText] = useState('');
+  const [hasOutput, setHasOutput] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Stripper state
+  const [stripOpts, setStripOpts] = useState<StripperOptions>({ ...STRIPPER_DEFAULTS });
+
+  // Unsloper state
+  const [unslopPatterns, setUnslopPatterns] = useState<UnslopPattern[]>([]);
+  const [unslopResult, setUnslopResult] = useState<ReturnType<typeof applyUnslop> | null>(null);
+
+  function runStripper() {
+    const result = applyStripper(inputText, stripOpts);
+    setOutputText(result);
+    setHasOutput(true);
+    showToast('Text stripped');
+  }
+
+  function runUnsloper() {
+    const patterns = detectUnslopPatterns(inputText);
+    setUnslopPatterns(patterns);
+    const result = applyUnslop(inputText, patterns);
+    setUnslopResult(result);
+    setOutputText(result.text);
+    setHasOutput(true);
+    showToast(`Unslopped — ${result.changeCount} changes, ${patterns.length} patterns found`);
+  }
+
+  function applyPreset(key: string) {
+    const preset = STRIPPER_PRESETS[key];
+    if (preset) setStripOpts({ ...STRIPPER_DEFAULTS, ...preset });
+  }
+
+  function copyOutput() {
+    if (!outputText) return;
+    navigator.clipboard?.writeText(outputText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+    showToast('Copied to clipboard');
+  }
+
+  function downloadOutput() {
+    if (!outputText) return;
+    const blob = new Blob([outputText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transformed-${mode}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const categories = unslopPatterns.reduce<Record<string, number>>((acc, p) => {
+    acc[p.category] = (acc[p.category] ?? 0) + p.count;
+    return acc;
+  }, {});
+
+  return (
+    <div className="xform-panel">
+      <div className="xform-tabs">
+        <button
+          className={`xform-tab ${mode === 'strip' ? 'active' : ''}`}
+          type="button"
+          onClick={() => setMode('strip')}
+        >
+          Strip / Obfuscate
+        </button>
+        <button
+          className={`xform-tab ${mode === 'unslop' ? 'active' : ''}`}
+          type="button"
+          onClick={() => setMode('unslop')}
+        >
+          Unslop
+        </button>
+      </div>
+
+      {mode === 'strip' ? (
+        <div className="xform-body">
+          {/* Presets */}
+          <div className="xform-presets">
+            <span className="xform-presets-label">Presets:</span>
+            {Object.keys(STRIPPER_PRESETS).map((key) => (
+              <button key={key} className="action-tactile button-ghost xform-preset-btn" type="button" onClick={() => applyPreset(key)}>
+                {key}
+              </button>
+            ))}
+            <button className="action-tactile button-ghost xform-preset-btn" type="button" onClick={() => setStripOpts({ ...STRIPPER_DEFAULTS })}>
+              reset
+            </button>
+          </div>
+
+          {/* Options grid */}
+          <div className="xform-opts">
+            <h4>Anonymize</h4>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.anonymizeNames} onChange={(e) => setStripOpts({ ...stripOpts, anonymizeNames: e.target.checked })} /> <span>Names → [NAME]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.anonymizeEmails} onChange={(e) => setStripOpts({ ...stripOpts, anonymizeEmails: e.target.checked })} /> <span>Emails → [EMAIL]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.anonymizePhones} onChange={(e) => setStripOpts({ ...stripOpts, anonymizePhones: e.target.checked })} /> <span>Phones → [PHONE]</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.anonymizeUrls} onChange={(e) => setStripOpts({ ...stripOpts, anonymizeUrls: e.target.checked })} /> <span>URLs → [URL]</span></label>
+
+            <h4>Strip Formatting</h4>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripMarkdown} onChange={(e) => setStripOpts({ ...stripOpts, stripMarkdown: e.target.checked })} /> <span>Markdown syntax</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripHtml} onChange={(e) => setStripOpts({ ...stripOpts, stripHtml: e.target.checked })} /> <span>HTML tags</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripLineNumbers} onChange={(e) => setStripOpts({ ...stripOpts, stripLineNumbers: e.target.checked })} /> <span>Line numbers</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripBom} onChange={(e) => setStripOpts({ ...stripOpts, stripBom: e.target.checked })} /> <span>BOM character</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.stripNonPrintable} onChange={(e) => setStripOpts({ ...stripOpts, stripNonPrintable: e.target.checked })} /> <span>Non-printable chars</span></label>
+
+            <h4>Normalize</h4>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.normalizeWhitespace} onChange={(e) => setStripOpts({ ...stripOpts, normalizeWhitespace: e.target.checked })} /> <span>Collapse whitespace</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.normalizeLineEndings} onChange={(e) => setStripOpts({ ...stripOpts, normalizeLineEndings: e.target.checked })} /> <span>Normalize line endings</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.trimTrailingWhitespace} onChange={(e) => setStripOpts({ ...stripOpts, trimTrailingWhitespace: e.target.checked })} /> <span>Trim trailing whitespace</span></label>
+            <label className="xform-check"><input type="checkbox" checked={stripOpts.collapseMultipleBlankLines} onChange={(e) => setStripOpts({ ...stripOpts, collapseMultipleBlankLines: e.target.checked })} /> <span>Collapse blank lines</span></label>
+          </div>
+
+          <button className="action-tactile button-primary xform-run" type="button" onClick={runStripper} disabled={!inputText}>
+            Strip Text
+          </button>
+        </div>
+      ) : (
+        <div className="xform-body">
+          <div className="xform-unslop-intro">
+            <p>Detects AI-typical phrases, inflated language, verbose synonyms, chatbot patterns, and formatting tells. Removes or replaces them with direct alternatives.</p>
+          </div>
+
+          <button className="action-tactile button-primary xform-run" type="button" onClick={runUnsloper} disabled={!inputText}>
+            <Sparkles size={15} /> Detect & Unslop
+          </button>
+
+          {unslopResult && (
+            <div className="xform-unslop-results">
+              <div className="xform-unslop-summary">
+                <div className="xform-unslop-stat">
+                  <span>Patterns found</span>
+                  <strong>{unslopResult.patternsFound.length}</strong>
+                </div>
+                <div className="xform-unslop-stat">
+                  <span>Changes made</span>
+                  <strong>{unslopResult.changeCount}</strong>
+                </div>
+                <div className="xform-unslop-stat">
+                  <span>Original</span>
+                  <strong>{unslopResult.originalLength.toLocaleString()} chars</strong>
+                </div>
+                <div className="xform-unslop-stat">
+                  <span>Transformed</span>
+                  <strong>{unslopResult.transformedLength.toLocaleString()} chars</strong>
+                </div>
+                <div className="xform-unslop-stat">
+                  <span>Reduction</span>
+                  <strong style={{ color: 'var(--color-tertiary)' }}>
+                    {unslopResult.originalLength > 0
+                      ? `${((1 - unslopResult.transformedLength / unslopResult.originalLength) * 100).toFixed(1)}%`
+                      : '0%'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Category breakdown */}
+              {Object.keys(categories).length > 0 && (
+                <div className="xform-unslop-cats">
+                  {Object.entries(categories).sort((a, b) => b[1] - a[1]).map(([cat, count]) => (
+                    <span key={cat} className="xform-unslop-cat">
+                      {cat} <strong>{count}</strong>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Pattern list */}
+              <div className="xform-unslop-list">
+                {unslopResult.patternsFound.map((pat) => (
+                  <div key={pat.phrase} className="xform-unslop-item">
+                    <span className="xform-unslop-phrase">"{pat.phrase}"</span>
+                    <span className="xform-unslop-cat-badge">{pat.category}</span>
+                    <span className="xform-unslop-count">×{pat.count}</span>
+                    <span className="xform-unslop-arrow">→</span>
+                    <span className="xform-unslop-replace">{pat.replacement}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Output */}
+      {hasOutput && (
+        <div className="xform-output">
+          <div className="xform-output-header">
+            <h4>Output</h4>
+            <div className="xform-output-actions">
+              <button className="action-tactile button-ghost" type="button" onClick={copyOutput}>
+                <Clipboard size={14} /> {copied ? 'Copied' : 'Copy'}
+              </button>
+              <button className="action-tactile button-ghost" type="button" onClick={downloadOutput}>
+                <Download size={14} /> Download
+              </button>
+            </div>
+          </div>
+          <textarea className="xform-output-text" readOnly value={outputText} rows={12} />
+        </div>
+      )}
+    </div>
   );
 }
 
