@@ -409,6 +409,30 @@ pre {
   border: none;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 4px;
+  color: #64748b;
+  text-decoration: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.help-link:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
 .account-chip {
   display: flex;
   align-items: center;

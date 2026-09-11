@@ -1,0 +1,25 @@
+{
+  "id": "watermark-app-features-08",
+  "seq": "08",
+  "title": "Research image editing libraries and capabilities",
+  "status": "pending",
+  "depends_on": [],
+  "parallel": true,
+  "suggested_agent": "ContextScout",
+  "context_files": [],
+  "reference_files": [
+    "src/App.tsx"
+  ],
+  "acceptance_criteria": [
+    "Identified top 3 libraries for canvas-based image editing (e.g., Fabric.js, Konva.js, PixiJS)",
+    "Libraries support format conversion (JPEG, PNG, WebP, AVIF, TIFF)",
+    "Libraries support metadata reading/writing (EXIF, IPTC, XMP)",
+    "Libraries support crop, rotate, resize, brightness, contrast, saturation",
+    "Research output saved as .tmp/research/image-editing-libraries.md"
+  ],
+  "deliverables": [
+    ".tmp/research/image-editing-libraries.md"
+  ],
+  "bounded_context": "research",
+  "module": "image-editing"
+}

@@ -1,5 +1,5 @@
 declare module '@fefeding/ppt-parser' {
-  export interface PptxSlide {
+  export interface PptxSlideData {
     shapes?: Array<{
       text?: string;
       table?: {
@@ -10,10 +10,26 @@ declare module '@fefeding/ppt-parser' {
     }>;
   }
 
-  export interface PptxResult {
-    slides?: PptxSlide[];
+  export interface PptxSlide {
+    data: PptxSlideData;
+    slideNum: number;
+    fileName: string;
   }
 
-  export function pptxToJson(data: ArrayBuffer): Promise<PptxResult>;
-  export function pptxToHtml(data: ArrayBuffer): Promise<{ slides: Array<{ html: string }> }>;
+  export interface PptxResult {
+    slides?: PptxSlide[];
+    slideSize?: { width: number; height: number };
+    metadata?: Record<string, unknown>;
+    charts?: unknown[];
+  }
+
+  export function pptxToJson(data: ArrayBuffer, options?: {
+    mediaProcess?: boolean;
+    themeProcess?: boolean | 'colorsAndImageOnly';
+  }): Promise<PptxResult>;
+
+  export function pptxToHtml(data: ArrayBuffer, options?: {
+    mediaProcess?: boolean;
+    themeProcess?: boolean | 'colorsAndImageOnly';
+  }): Promise<{ slides: Array<{ html: string; data: PptxSlideData; slideNum: number }>; slideSize?: { width: number; height: number } }>;
 }

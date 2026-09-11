@@ -1,0 +1,28 @@
+{
+  "id": "watermark-app-features-02",
+  "seq": "02",
+  "title": "Add .doc and .docx file support using mammoth.js",
+  "status": "pending",
+  "depends_on": [],
+  "parallel": true,
+  "suggested_agent": "CoderAgent",
+  "context_files": [],
+  "reference_files": [
+    "src/lib/extract.ts",
+    "src/lib/ppt-parser.d.ts",
+    "package.json"
+  ],
+  "acceptance_criteria": [
+    ".docx files are accepted and text extracted via mammoth.js",
+    ".doc files are rejected with a clear error message (mammoth doesn't support .doc)",
+    "TEXT_ACCEPT includes .docx extension",
+    "File format detection returns 'docx' for .docx files"
+  ],
+  "deliverables": [
+    "npm install mammoth",
+    "src/lib/extract.ts (new extractDocxText function)",
+    "src/lib/ppt-parser.d.ts (type declarations updated)"
+  ],
+  "bounded_context": "file-processing",
+  "module": "extract"
+}

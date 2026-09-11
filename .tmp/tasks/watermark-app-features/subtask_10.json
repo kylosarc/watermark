@@ -1,0 +1,32 @@
+{
+  "id": "watermark-app-features-10",
+  "seq": "10",
+  "title": "Add binary file analysis - metadata capture, display, and editing for images/videos/documents",
+  "status": "pending",
+  "depends_on": ["08"],
+  "parallel": false,
+  "suggested_agent": "CoderAgent",
+  "context_files": [],
+  "reference_files": [
+    "src/App.tsx",
+    "src/lib/extract.ts"
+  ],
+  "acceptance_criteria": [
+    "New 'Binary Analysis' tab/view in the navigation",
+    "Image metadata display: EXIF, IPTC, XMP (camera model, GPS, date, etc.)",
+    "Image metadata editing: modify or strip EXIF data",
+    "Video metadata display: container format, codec, duration, resolution",
+    "Document metadata: PDF properties, author, creator tool",
+    "Format conversion: image re-encode between formats (JPEG, PNG, WebP)",
+    "Binary hex viewer for raw file inspection",
+    "Uses research findings from task 08 for library selection"
+  ],
+  "deliverables": [
+    "npm install (selected library from task 08)",
+    "src/lib/binary-analysis.ts (new module)",
+    "src/App.tsx (BinaryAnalysisView component)",
+    "src/styles.css (binary analysis styles)"
+  ],
+  "bounded_context": "file-processing",
+  "module": "binary-analysis"
+}

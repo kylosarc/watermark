@@ -1496,11 +1496,24 @@ function LineageView({ result, showToast }: { result: VerificationResult | null;
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const dragging = useRef<{ startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
 
   const { nodes, edges } = result ? buildLineage(result) : { nodes: [], edges: [] };
 
-  const graphWidth = 500;
-  const graphHeight = Math.max(400, nodes.length * 80 + 100);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width || 800);
+      }
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const graphWidth = Math.max(containerWidth, 600);
+  const graphHeight = Math.max(500, nodes.length * 80 + 100);
 
   function handleMouseDown(e: React.MouseEvent) {
     if (e.target === svgRef.current || (e.target as SVGElement).tagName === 'rect') {
@@ -1595,7 +1608,7 @@ function LineageView({ result, showToast }: { result: VerificationResult | null;
           </div>
 
           {/* Graph */}
-          <div className="lineage-graph-wrap">
+          <div className="lineage-graph-wrap" ref={containerRef}>
             <svg
               ref={svgRef}
               className="lineage-svg"
@@ -3846,8 +3859,13 @@ function Header({ view, setView }: { view: View; setView: (view: View) => void }
           );
         })}
       </nav>
-      <div className="account-chip" aria-label="Local session">
-        <UserRound size={17} />
+      <div className="header-actions">
+        <a href="/docs/index.html" target="_blank" rel="noopener" className="help-link" title="Help & Documentation">
+          <BookOpen size={17} />
+        </a>
+        <div className="account-chip" aria-label="Local session">
+          <UserRound size={17} />
+        </div>
       </div>
     </header>
   );

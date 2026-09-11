@@ -1,0 +1,30 @@
+{
+  "id": "watermark-app-features-05",
+  "seq": "05",
+  "title": "Add localStorage persistence for uploaded data across tabs",
+  "status": "pending",
+  "depends_on": [],
+  "parallel": true,
+  "suggested_agent": "CoderAgent",
+  "context_files": [],
+  "reference_files": [
+    "src/App.tsx"
+  ],
+  "acceptance_criteria": [
+    "Inspector tab: result and file metadata persist across tab switches",
+    "Batch tab: batch items persist across tab switches",
+    "Text tab: text items and analysis results persist across tab switches",
+    "Simulator tab: source file and results persist across tab switches",
+    "Diff tab: both slots persist across tab switches",
+    "Playground tab: rules and results persist across tab switches",
+    "Data is serialized as JSON (no File objects - store name/size/type/metadata)",
+    "Persistence uses key prefix 'watermark-' to avoid collisions",
+    "Max storage size check with warning at ~4MB"
+  ],
+  "deliverables": [
+    "src/lib/storage.ts (new persistence utility module)",
+    "src/App.tsx (all view components updated to use persistence)"
+  ],
+  "bounded_context": "data-persistence",
+  "module": "storage"
+}
