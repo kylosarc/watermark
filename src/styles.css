@@ -4091,12 +4091,11 @@ pre {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 8px 12px;
   border-radius: 8px;
   background: rgba(18, 20, 23, 0.5);
   border: 1px solid rgba(61, 73, 76, 0.2);
-  cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 
@@ -4120,6 +4119,7 @@ pre {
   gap: 10px;
   flex: 1;
   min-width: 0;
+  cursor: pointer;
 }
 
 .txt-batch-item-name {
@@ -4176,6 +4176,38 @@ pre {
   padding: 1px 5px;
   letter-spacing: 0.05em;
   flex-shrink: 0;
+}
+
+.txt-batch-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.txt-batch-item-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--color-outline);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.txt-batch-item-btn:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-dim);
+}
+
+.txt-batch-item-btn.active {
+  color: var(--color-primary);
+  border-color: rgba(76, 215, 246, 0.3);
+  background: var(--color-primary-dim);
 }
 
 .txt-batch-item-remove {

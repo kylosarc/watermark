@@ -2335,9 +2335,8 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
                 <div
                   key={it.id}
                   className={`txt-batch-item ${selectedId === it.id ? 'selected' : ''} ${it.status}`}
-                  onClick={() => setSelectedId(it.id)}
                 >
-                  <div className="txt-batch-item-main">
+                  <div className="txt-batch-item-main" onClick={() => setSelectedId(it.id)}>
                     <FileText size={16} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
                     <span className="txt-batch-item-name">{it.source === 'file' ? it.fileName : 'Pasted text'}</span>
                     {it.format && it.format !== 'text' && (
@@ -2355,14 +2354,36 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
                     )}
                     {it.status === 'error' && <span className="txt-batch-item-status error">Error</span>}
                   </div>
-                  <button
-                    className="txt-batch-item-remove"
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); removeItem(it.id); }}
-                    title="Remove"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  <div className="txt-batch-item-actions">
+                    {it.status === 'done' && it.analysis && (
+                      <>
+                        <button
+                          className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'analysis' ? 'active' : ''}`}
+                          type="button"
+                          title="View analysis"
+                          onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('analysis'); }}
+                        >
+                          <Info size={13} />
+                        </button>
+                        <button
+                          className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'transform' ? 'active' : ''}`}
+                          type="button"
+                          title="Strip / Unslop"
+                          onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('transform'); }}
+                        >
+                          <Sparkles size={13} />
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="txt-batch-item-remove"
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); removeItem(it.id); }}
+                      title="Remove"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -2371,24 +2392,6 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
           {/* Detail panel for selected item */}
           {selectedItem && selectedItem.analysis && (
             <>
-              {/* Sub-tab bar */}
-              <div className="txt-subtabs">
-                <button
-                  className={`txt-subtab ${subTab === 'analysis' ? 'active' : ''}`}
-                  type="button"
-                  onClick={() => setSubTab('analysis')}
-                >
-                  <Info size={14} /> Analysis
-                </button>
-                <button
-                  className={`txt-subtab ${subTab === 'transform' ? 'active' : ''}`}
-                  type="button"
-                  onClick={() => setSubTab('transform')}
-                >
-                  <Sparkles size={14} /> Strip / Unslop
-                </button>
-              </div>
-
               {subTab === 'analysis' ? (
                 <TextDetailPanel
                   item={selectedItem}
