@@ -58,6 +58,14 @@ import {
   type StripperOptions, type UnslopPattern,
 } from './lib/transform';
 import type { ManifestSummary, ValidationCode, VerificationResult, VerificationStatus } from './lib/types';
+import {
+  storeResult, getStoredResult,
+  storeFileInfo, getStoredFileInfo,
+  storeTextItems, getStoredTextItems,
+  storeStripperOpts, getStoredStripperOpts,
+  storeLastView, getStoredLastView,
+  clearAll,
+} from './lib/persist';
 import './styles.css';
 
 const ACCEPTED_TYPES = 'image/*,video/mp4,video/quicktime,audio/*';
@@ -2139,7 +2147,22 @@ interface TextItem {
 let textIdCounter = 0;
 
 function TextView({ showToast }: { showToast: (msg: string) => void }) {
-  const [items, setItems] = useState<TextItem[]>([]);
+  const [items, setItems] = useState<TextItem[]>(() => {
+    const stored = getStoredTextItems();
+    if (stored.length === 0) return [];
+    // Restore items from storage (without File objects, analysis is null — will re-analyze)
+    return stored.map((s) => ({
+      id: s.id ?? 0,
+      content: s.content ?? '',
+      source: (s.source as 'paste' | 'file') ?? 'paste',
+      fileName: s.fileName ?? 'restored',
+      sha256: s.sha256 ?? '',
+      format: s.format ?? 'text',
+      c2paResult: null,
+      analysis: null,
+      status: 'done' as const,
+    }));
+  });
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pasteText, setPasteText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -2153,6 +2176,20 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
   // Sub-tab for detail panel
   type TextSubTab = 'analysis' | 'transform';
   const [subTab, setSubTab] = useState<TextSubTab>('analysis');
+
+  // Persistence: save text items when they change
+  useEffect(() => {
+    if (items.length > 0) {
+      storeTextItems(items.map(it => ({
+        id: it.id,
+        content: it.content,
+        source: it.source,
+        fileName: it.fileName,
+        sha256: it.sha256,
+        format: it.format,
+      })));
+    }
+  }, [items]);
 
   const selectedItem = items.find((it) => it.id === selectedId) ?? null;
 
@@ -2276,6 +2313,7 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
     setSelectedId(null);
     setPasteText('');
     setTextSimResults([]);
+    localStorage.removeItem('wm:textItems');
     showToast('Cleared');
   }
 
@@ -2755,7 +2793,15 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
   const [copied, setCopied] = useState(false);
 
   // Stripper state
-  const [stripOpts, setStripOpts] = useState<StripperOptions>({ ...STRIPPER_DEFAULTS });
+  const [stripOpts, setStripOpts] = useState<StripperOptions>(() => {
+    const stored = getStoredStripperOpts();
+    return stored ? { ...STRIPPER_DEFAULTS, ...stored } : { ...STRIPPER_DEFAULTS };
+  });
+
+  // Persistence: save stripper options when they change
+  useEffect(() => {
+    storeStripperOpts(stripOpts as unknown as Record<string, unknown>);
+  }, [stripOpts]);
 
   // Unsloper state
   const [unslopPatterns, setUnslopPatterns] = useState<UnslopPattern[]>([]);
@@ -3260,9 +3306,9 @@ function BatchView({ showToast }: { showToast: (msg: string) => void }) {
 /* ── Main App ────────────────────────────────────────────────── */
 
 export default function App() {
-  const [view, setView] = useState<View>('inspector');
+  const [view, setView] = useState<View>(() => (getStoredLastView() as View) || 'inspector');
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('overview');
-  const [result, setResult] = useState<VerificationResult | null>(null);
+  const [result, setResult] = useState<VerificationResult | null>(() => getStoredResult());
   const [file, setFile] = useState<File | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -3278,6 +3324,7 @@ export default function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const reticleRef = useRef<HTMLDivElement>(null);
   const { toasts, show: showToast } = useToast();
+  const hasRestoredRef = useRef(false);
 
   useEffect(() => () => {
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
@@ -3296,6 +3343,27 @@ export default function App() {
     const returnToInspector = () => setView('inspector');
     window.addEventListener('watermark:return-inspector', returnToInspector);
     return () => window.removeEventListener('watermark:return-inspector', returnToInspector);
+  }, []);
+
+  // Persistence: save result when it changes
+  useEffect(() => {
+    storeResult(result);
+  }, [result]);
+
+  // Persistence: save view when it changes
+  useEffect(() => {
+    storeLastView(view);
+  }, [view]);
+
+  // Persistence: restore file info from stored result
+  useEffect(() => {
+    if (hasRestoredRef.current) return;
+    hasRestoredRef.current = true;
+    const storedFile = getStoredFileInfo();
+    if (storedFile && !file) {
+      // We can't restore the actual File object, but we can show the name
+      // The user will need to re-drop to get full functionality
+    }
   }, []);
 
   // Telemetry offset fluctuation
@@ -3352,6 +3420,7 @@ export default function App() {
     setIsSample(false);
     setResult(null);
     setFile(file);
+    storeFileInfo(file);
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
 
     const nextPreview = file.type.startsWith('image/') ? window.URL.createObjectURL(file) : null;
@@ -3382,8 +3451,10 @@ export default function App() {
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setResult(null);
+    setFile(null);
     setIsSample(false);
     setZoom(100);
+    clearAll();
     showToast('Local session reset. Memory buffer cleared.');
   }
 
