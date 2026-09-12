@@ -346,3 +346,137 @@ function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
+
+// ── Metadata Sanitizer ─────────────────────────────────────────
+
+export const SANITIZE_PRESETS: Record<string, { label: string; keep: string[] }> = {
+  minimal: {
+    label: 'Minimal (strip everything)',
+    keep: ['File Info'],
+  },
+  social: {
+    label: 'Social Media Safe',
+    keep: ['File Info', 'Camera & Technical', 'Dates'],
+  },
+  professional: {
+    label: 'Professional Portfolio',
+    keep: ['File Info', 'Camera & Technical', 'Dates', 'Copyright & Author'],
+  },
+  forensic: {
+    label: 'Forensic (keep all)',
+    keep: ['File Info', 'Camera & Technical', 'Dates', 'Location', 'Copyright & Author', 'Software & AI Detection'],
+  },
+  redact: {
+    label: 'Privacy (strip location + author)',
+    keep: ['File Info', 'Camera & Technical', 'Dates', 'Software & AI Detection'],
+  },
+};
+
+export interface SanitizeResult {
+  sections: MetadataSection[];
+  removedCount: number;
+  keptCount: number;
+}
+
+export function sanitizeMetadata(
+  metadata: FileMetadata,
+  keepSections: string[]
+): SanitizeResult {
+  const kept: MetadataEntry[] = [];
+  const removed: MetadataEntry[] = [];
+
+  for (const section of metadata.sections) {
+    if (keepSections.includes(section.label)) {
+      kept.push(...section.entries);
+    } else {
+      removed.push(...section.entries);
+    }
+  }
+
+  return {
+    sections: keepSections
+      .filter((label) => metadata.sections.some((s) => s.label === label))
+      .map((label) => ({
+        label,
+        entries: metadata.sections.find((s) => s.label === label)?.entries ?? [],
+      })),
+    removedCount: removed.length,
+    keptCount: kept.length,
+  };
+}
+
+// ── Metadata Editor (for plain text fields) ────────────────────
+
+export interface EditableField {
+  section: string;
+  key: string;
+  value: string;
+  editable: true;
+}
+
+export function getEditableFields(metadata: FileMetadata): EditableField[] {
+  const editable = new Set([
+    'Artist', 'Copyright', 'ImageDescription', 'UserComment',
+    'Software', 'ProcessingSoftware', 'HostComputer', 'Rating',
+    'DateTimeOriginal', 'DateTimeDigitized', 'ModifyDate',
+  ]);
+
+  const fields: EditableField[] = [];
+  for (const section of metadata.sections) {
+    for (const entry of section.entries) {
+      if (editable.has(entry.key)) {
+        fields.push({
+          section: section.label,
+          key: entry.key,
+          value: entry.value,
+          editable: true,
+        });
+      }
+    }
+  }
+  return fields;
+}
+
+export function applyMetadataEdit(
+  metadata: FileMetadata,
+  section: string,
+  key: string,
+  newValue: string
+): FileMetadata {
+  const updated = { ...metadata, sections: metadata.sections.map((s) => ({ ...s, entries: [...s.entries] })) };
+  const sec = updated.sections.find((s) => s.label === section);
+  if (sec) {
+    const entry = sec.entries.find((e) => e.key === key);
+    if (entry) {
+      entry.value = newValue;
+    }
+  }
+  return updated;
+}
+
+// ── Write metadata back to image (EXIF/XMP) ────────────────────
+
+export async function writeMetadataToFile(
+  file: File,
+  metadata: Record<string, unknown>
+): Promise<Blob> {
+  // For JPEG: use piexifjs-style approach via canvas re-encode
+  // For now, return original file with a note that editing requires
+  // a dedicated library. This is the foundation for future work.
+  //
+  // Future: Use piexifjs for JPEG EXIF write, or exifr + canvas
+  // for a full round-trip. The key challenge is preserving the
+  // exact byte stream while modifying metadata segments.
+
+  // For images, we can at least strip metadata by re-encoding through canvas
+  if (file.type.startsWith('image/') && file.type !== 'image/svg+xml') {
+    const bitmap = await createImageBitmap(file);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(bitmap, 0, 0);
+    return canvas.convertToBlob({ type: file.type, quality: 0.95 });
+  }
+
+  // For non-image files, return original (metadata editing not yet supported)
+  return file;
+}

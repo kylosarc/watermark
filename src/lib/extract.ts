@@ -81,7 +81,30 @@ async function extractPdfText(file: File): Promise<ExtractedText> {
 
 async function extractPptxText(file: File): Promise<ExtractedText> {
   const arrayBuffer = await file.arrayBuffer();
-  const result = await pptxToJson(arrayBuffer, { mediaProcess: false, themeProcess: false });
+
+  let result: { slides?: Array<{ data?: { shapes?: Array<{ text?: string; table?: { rows?: Array<{ cells?: Array<{ text?: string }> }> } }> }; slideNum?: number }> };
+  try {
+    result = await pptxToJson(arrayBuffer, { mediaProcess: false, themeProcess: false });
+  } catch (e) {
+    // pptxToJson can fail on valid PPTX files — fall back to pptxToHtml for text extraction
+    try {
+      const { pptxToHtml } = await import('@fefeding/ppt-parser');
+      const htmlResult = await pptxToHtml(arrayBuffer, { mediaProcess: false, themeProcess: false });
+      const text = htmlResult.slides
+        .map((s) => {
+          // Strip HTML tags to get plain text
+          const div = document.createElement('div');
+          div.innerHTML = s.html;
+          return div.textContent || div.innerText || '';
+        })
+        .filter((t) => t.trim().length > 0)
+        .join('\n\n');
+      return { text, format: 'pptx', pageCount: htmlResult.slides.length };
+    } catch {
+      throw new Error(`Failed to parse PPTX: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   const slides: string[] = [];
 
   if (result?.slides) {

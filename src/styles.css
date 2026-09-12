@@ -4205,7 +4205,7 @@ pre {
 .txt-batch-item-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
@@ -4214,12 +4214,14 @@ pre {
   border: 1px solid transparent;
   color: var(--color-outline);
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 4px 8px;
   border-radius: 4px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
   flex-shrink: 0;
+  font-size: 11px;
+  white-space: nowrap;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 

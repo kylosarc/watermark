@@ -16,6 +16,7 @@ import {
   Copy,
   Diff,
   Download,
+  Eye,
   FileCheck2,
   FileJson,
   FileText,
@@ -31,6 +32,7 @@ import {
   Lock,
   LockKeyhole,
   Maximize,
+  Pencil,
   Play,
   RefreshCw,
   ScanSearch,
@@ -51,7 +53,7 @@ import { verifyFile } from './lib/c2pa';
 import { errorResult } from './lib/verification';
 import { formatBytes, sha256Hex } from './lib/file';
 import { extractTextFromFile, TEXT_ACCEPT, detectFormat } from './lib/extract';
-import { extractFileMetadata, type FileMetadata } from './lib/metadata';
+import { extractFileMetadata, type FileMetadata, sanitizeMetadata, SANITIZE_PRESETS, applyMetadataEdit } from './lib/metadata';
 import {
   applyStripper, STRIPPER_DEFAULTS, STRIPPER_PRESETS,
   detectUnslopPatterns, applyUnslop,
@@ -189,6 +191,10 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string>('info');
+  const [editMode, setEditMode] = useState(false);
+  const [editField, setEditField] = useState<{ section: string; key: string; value: string } | null>(null);
+  const [sanitizePreset, setSanitizePreset] = useState<string>('forensic');
+  const [sanitizedMeta, setSanitizedMeta] = useState<FileMetadata | null>(null);
 
   useEffect(() => {
     if (!file) return;
@@ -216,10 +222,101 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
     warning: 'var(--color-error)',
   };
 
+  const editableKeys = new Set(['Artist', 'Copyright', 'ImageDescription', 'UserComment', 'Software', 'Rating']);
+
+  function handleEditField(section: string, key: string, value: string) {
+    setEditField({ section, key, value });
+    setEditMode(true);
+  }
+
+  function saveEdit() {
+    if (!editField || !metadata) return;
+    const updated = applyMetadataEdit(metadata, editField.section, editField.key, editField.value);
+    setMetadata(updated);
+    setEditMode(false);
+    setEditField(null);
+  }
+
+  function runSanitize() {
+    if (!metadata) return;
+    const preset = SANITIZE_PRESETS[sanitizePreset];
+    if (!preset) return;
+    const result = sanitizeMetadata(metadata, preset.keep);
+    setSanitizedMeta({
+      ...metadata,
+      sections: result.sections,
+    });
+  }
+
+  function downloadSanitized() {
+    if (!file) return;
+    const meta = sanitizedMeta || metadata;
+    const blob = new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${file.name.replace(/\.[^.]+$/, '')}_metadata.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="inspector-tab-content">
       <div className="panel" style={{ padding: 16 }}>
-        <span style={{ fontWeight: 600, color: 'var(--color-on-surface)' }}>File Metadata & Binary Analysis</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: 600, color: 'var(--color-on-surface)' }}>File Metadata & Binary Analysis</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="action-tactile button-ghost" type="button" onClick={() => { setEditMode(false); setEditField(null); }}>
+              <Eye size={13} /> View
+            </button>
+            <button className="action-tactile button-ghost" type="button" onClick={() => setEditMode(true)}>
+              <Pencil size={13} /> Edit
+            </button>
+            <button className="action-tactile button-ghost" type="button" onClick={downloadSanitized}>
+              <Download size={13} /> Export JSON
+            </button>
+          </div>
+        </div>
+
+        {/* Sanitizer */}
+        <div style={{ marginTop: 12, padding: '8px 12px', background: 'var(--color-surface-lowest)', borderRadius: 6, border: '1px solid rgba(61,73,76,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-on-surface)' }}>Sanitize:</span>
+            <select
+              value={sanitizePreset}
+              onChange={(e) => setSanitizePreset(e.target.value)}
+              style={{ fontSize: 12, padding: '2px 6px', borderRadius: 4, background: 'var(--color-surface)', color: 'var(--color-on-surface)', border: '1px solid var(--color-outline-variant)' }}
+            >
+              {Object.entries(SANITIZE_PRESETS).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+            <button className="action-tactile button-secondary" type="button" onClick={runSanitize} style={{ fontSize: 12, padding: '2px 8px' }}>
+              <ShieldCheck size={13} /> Apply
+            </button>
+            {sanitizedMeta && (
+              <span style={{ fontSize: 11, color: 'var(--color-tertiary)' }}>
+                {metadata.sections.length} → {sanitizedMeta.sections.length} sections
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Edit field dialog */}
+        {editMode && editField && (
+          <div style={{ marginTop: 12, padding: '10px 12px', background: 'rgba(76, 215, 246, 0.05)', borderRadius: 6, border: '1px solid rgba(76, 215, 246, 0.2)' }}>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}>Editing: {editField.key}</div>
+            <textarea
+              value={editField.value}
+              onChange={(e) => setEditField({ ...editField, value: e.target.value })}
+              style={{ width: '100%', minHeight: 60, fontSize: 12, fontFamily: 'var(--font-mono)', padding: 6, borderRadius: 4, background: 'var(--color-surface)', color: 'var(--color-on-surface)', border: '1px solid var(--color-outline-variant)', resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <button className="action-tactile button-primary" type="button" onClick={saveEdit} style={{ fontSize: 12 }}>Save</button>
+              <button className="action-tactile button-ghost" type="button" onClick={() => { setEditMode(false); setEditField(null); }} style={{ fontSize: 12 }}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {/* Section tabs */}
         <div className="metadata-section-tabs" style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
@@ -281,13 +378,23 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
             metadata.sections.filter(s => s.label === activeSection).map((section) => (
               <div key={section.label} className="metadata-entries">
                 {section.entries.map((entry) => (
-                  <div key={entry.key} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8, fontSize: 12, padding: '4px 0', borderBottom: '1px solid rgba(61,73,76,0.2)' }}>
+                  <div key={entry.key} style={{ display: 'grid', gridTemplateColumns: '140px 1fr auto', gap: 8, fontSize: 12, padding: '4px 0', borderBottom: '1px solid rgba(61,73,76,0.2)', alignItems: 'center' }}>
                     <span style={{ color: categoryColors[entry.category] ?? '#94a3b8', fontWeight: 500 }}>{entry.key}</span>
                     <span style={{ color: 'var(--color-on-surface)', fontFamily: entry.key === 'SHA-256' || entry.key === 'Magic Bytes' ? 'var(--font-mono)' : 'inherit', wordBreak: 'break-all' }}>
                       {entry.key === 'Google Maps' ? (
                         <a href={entry.value} target="_blank" rel="noopener" style={{ color: 'var(--color-primary)' }}>{entry.value}</a>
                       ) : entry.value}
                     </span>
+                    {editableKeys.has(entry.key) && (
+                      <button
+                        className="action-tactile button-ghost"
+                        type="button"
+                        style={{ fontSize: 11, padding: '2px 6px' }}
+                        onClick={() => handleEditField(section.label, entry.key, entry.value)}
+                      >
+                        <Pencil size={11} /> Edit
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2525,23 +2632,21 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
                     {it.status === 'error' && <span className="txt-batch-item-status error">Error</span>}
                   </div>
                   <div className="txt-batch-item-actions">
-                    {it.status === 'done' && it.analysis && (
+                    {it.status === 'done' && (
                       <>
                         <button
                           className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'analysis' ? 'active' : ''}`}
                           type="button"
-                          title="View analysis"
                           onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('analysis'); }}
                         >
-                          <Info size={13} />
+                          <Info size={13} /> Analysis
                         </button>
                         <button
                           className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'transform' ? 'active' : ''}`}
                           type="button"
-                          title="Strip / Unslop"
                           onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('transform'); }}
                         >
-                          <Sparkles size={13} />
+                          <Sparkles size={13} /> Strip / Unslop
                         </button>
                       </>
                     )}
