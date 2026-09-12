@@ -2891,8 +2891,50 @@ function TextDetailPanel({
 
 /* ── Text Transform Panel (Stripper / Unsloper) ─────────────────── */
 
+interface DiffLine {
+  type: 'unchanged' | 'removed' | 'added';
+  text: string;
+  outText?: string;
+  origNum: number;
+  outNum: number;
+}
+
+function diffLines(original: string, transformed: string): DiffLine[] {
+  const origLines = original.split('\n');
+  const outLines = transformed.split('\n');
+  const result: DiffLine[] = [];
+
+  // Simple line-by-line diff
+  const maxLen = Math.max(origLines.length, outLines.length);
+  let origNum = 1;
+  let outNum = 1;
+
+  for (let i = 0; i < maxLen; i++) {
+    const origLine = origLines[i] ?? '';
+    const outLine = outLines[i] ?? '';
+
+    if (origLine === outLine) {
+      result.push({ type: 'unchanged', text: origLine, origNum, outNum });
+      origNum++;
+      outNum++;
+    } else {
+      if (origLine !== undefined && i < origLines.length) {
+        result.push({ type: 'removed', text: origLine, origNum, outNum });
+        origNum++;
+      }
+      if (outLine !== undefined && i < outLines.length) {
+        result.push({ type: 'added', text: outLine, outText: outLine, origNum, outNum });
+        outNum++;
+      }
+    }
+  }
+
+  return result;
+}
+
 function TextTransformPanel({ inputText, showToast }: { inputText: string; showToast: (msg: string) => void }) {
   const [mode, setMode] = useState<'strip' | 'unslop'>('strip');
+  const [viewMode, setViewMode] = useState<'output' | 'diff'>('output');
   const [outputText, setOutputText] = useState('');
   const [hasOutput, setHasOutput] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -3106,6 +3148,24 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
         <div className="xform-output">
           <div className="xform-output-header">
             <h4>Output</h4>
+            <div style={{ display: 'flex', gap: 4, marginRight: 'auto', marginLeft: 12 }}>
+              <button
+                className={`action-tactile ${viewMode === 'output' ? 'button-primary' : 'button-ghost'}`}
+                type="button"
+                onClick={() => setViewMode('output')}
+                style={{ fontSize: 11, padding: '2px 8px' }}
+              >
+                <FileText size={13} /> Text
+              </button>
+              <button
+                className={`action-tactile ${viewMode === 'diff' ? 'button-primary' : 'button-ghost'}`}
+                type="button"
+                onClick={() => setViewMode('diff')}
+                style={{ fontSize: 11, padding: '2px 8px' }}
+              >
+                <Diff size={13} /> Side-by-Side
+              </button>
+            </div>
             <div className="xform-output-actions">
               <button className="action-tactile button-ghost" type="button" onClick={copyOutput}>
                 <Clipboard size={14} /> {copied ? 'Copied' : 'Copy'}
@@ -3115,7 +3175,42 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
               </button>
             </div>
           </div>
-          <textarea className="xform-output-text" readOnly value={outputText} rows={12} />
+
+          {viewMode === 'diff' ? (
+            <div className="side-by-side-diff">
+              <div className="diff-pane">
+                <div className="diff-pane-header">
+                  <span>Original</span>
+                  <span className="diff-pane-stats">{inputText.length.toLocaleString()} chars</span>
+                </div>
+                <div className="diff-pane-content">
+                  {diffLines(inputText, outputText).map((line, i) => (
+                    <div key={`orig-${i}`} className={`diff-line ${line.type === 'removed' ? 'removed' : line.type === 'unchanged' ? '' : 'dim'}`}>
+                      <span className="diff-line-num">{line.type === 'removed' || line.type === 'unchanged' ? line.origNum : ''}</span>
+                      <span className="diff-line-text">{line.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="diff-divider" />
+              <div className="diff-pane">
+                <div className="diff-pane-header">
+                  <span>Transformed</span>
+                  <span className="diff-pane-stats">{outputText.length.toLocaleString()} chars</span>
+                </div>
+                <div className="diff-pane-content">
+                  {diffLines(inputText, outputText).map((line, i) => (
+                    <div key={`out-${i}`} className={`diff-line ${line.type === 'added' ? 'added' : line.type === 'unchanged' ? '' : 'dim'}`}>
+                      <span className="diff-line-num">{line.type === 'added' || line.type === 'unchanged' ? line.outNum : ''}</span>
+                      <span className="diff-line-text">{line.type === 'removed' ? '' : (line.outText ?? line.text)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <textarea className="xform-output-text" readOnly value={outputText} rows={12} />
+          )}
         </div>
       )}
     </div>
