@@ -15,6 +15,10 @@ const KEYS = {
   BATCH_ITEMS: 'wm:batchItems',
   STRIPPER_OPTS: 'wm:stripperOpts',
   LAST_VIEW: 'wm:lastView',
+  SIM_RESULTS: 'wm:simResults',
+  PLAYGROUND_RULES: 'wm:playgroundRules',
+  DIFF_SLOT_A: 'wm:diffSlotA',
+  MEDIA_BATCH: 'wm:mediaBatch',
 } as const;
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -154,6 +158,85 @@ export function storeLastView(view: string): void {
 
 export function getStoredLastView(): string | null {
   return safeGet<string | null>(KEYS.LAST_VIEW, null);
+}
+
+// ── Simulator Results ──────────────────────────────────────────
+
+export interface StoredSimResult {
+  name: string;
+  description: string;
+  hash: string;
+  preserved: boolean;
+}
+
+export function storeSimResults(results: StoredSimResult[]): void {
+  safeSet(KEYS.SIM_RESULTS, results);
+}
+
+export function getStoredSimResults(): StoredSimResult[] {
+  return safeGet<StoredSimResult[]>(KEYS.SIM_RESULTS, []);
+}
+
+// ── Trust Playground Rules ─────────────────────────────────────
+
+export interface StoredPlaygroundRule {
+  id: string;
+  field: string;
+  operator: string;
+  value: string;
+  enabled: boolean;
+}
+
+export function storePlaygroundRules(rules: StoredPlaygroundRule[]): void {
+  safeSet(KEYS.PLAYGROUND_RULES, rules);
+}
+
+export function getStoredPlaygroundRules(): StoredPlaygroundRule[] {
+  return safeGet<StoredPlaygroundRule[]>(KEYS.PLAYGROUND_RULES, []);
+}
+
+// ── Diff Slot A ────────────────────────────────────────────────
+
+export interface StoredDiffSlot {
+  fileName: string | null;
+  fileSize: number;
+  mimeType: string;
+  sha256: string;
+  validationState: string;
+}
+
+export function storeDiffSlotA(slot: StoredDiffSlot | null): void {
+  if (!slot) {
+    safeRemove(KEYS.DIFF_SLOT_A);
+    return;
+  }
+  safeSet(KEYS.DIFF_SLOT_A, slot);
+}
+
+export function getStoredDiffSlotA(): StoredDiffSlot | null {
+  return safeGet<StoredDiffSlot | null>(KEYS.DIFF_SLOT_A, null);
+}
+
+// ── Media Batch ────────────────────────────────────────────────
+
+export interface StoredMediaBatchItem {
+  id: number;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  sha256: string;
+  status: string;
+  validationState: string | null;
+  manifestCount: number;
+  signedAt: string | null;
+}
+
+export function storeMediaBatch(items: StoredMediaBatchItem[]): void {
+  safeSet(KEYS.MEDIA_BATCH, items);
+}
+
+export function getStoredMediaBatch(): StoredMediaBatchItem[] {
+  return safeGet<StoredMediaBatchItem[]>(KEYS.MEDIA_BATCH, []);
 }
 
 // ── Clear All ──────────────────────────────────────────────────

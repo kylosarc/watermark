@@ -59,13 +59,17 @@ import {
   detectUnslopPatterns, applyUnslop,
   type StripperOptions, type UnslopPattern,
 } from './lib/transform';
-import type { ManifestSummary, ValidationCode, VerificationResult, VerificationStatus } from './lib/types';
+import type { ManifestSummary, ValidationCode, VerificationResult, VerificationStatus, ValidationState } from './lib/types';
 import {
   storeResult, getStoredResult,
   storeFileInfo, getStoredFileInfo,
   storeTextItems, getStoredTextItems,
   storeStripperOpts, getStoredStripperOpts,
   storeLastView, getStoredLastView,
+  storeSimResults, getStoredSimResults,
+  storePlaygroundRules, getStoredPlaygroundRules,
+  storeDiffSlotA, getStoredDiffSlotA,
+  storeMediaBatch, getStoredMediaBatch,
   clearAll,
 } from './lib/persist';
 import './styles.css';
@@ -592,10 +596,42 @@ function computeDiff(a: VerificationResult, b: VerificationResult): DiffResult {
 }
 
 function DiffView({ showToast }: { showToast: (msg: string) => void }) {
-  const [slotA, setSlotA] = useState<DiffSlot>({ file: null, previewUrl: null, result: null, status: 'empty' });
+  const [slotA, setSlotA] = useState<DiffSlot>(() => {
+    const stored = getStoredDiffSlotA();
+    if (!stored) return { file: null, previewUrl: null, result: null, status: 'empty' };
+    return {
+      file: null,
+      previewUrl: null,
+      result: stored.sha256 ? {
+        status: 'ready' as const,
+        fileName: stored.fileName ?? '',
+        fileSize: stored.fileSize,
+        mimeType: stored.mimeType,
+        sha256: stored.sha256,
+        validationState: (stored.validationState || 'Unknown') as ValidationState,
+        manifestCount: 0,
+        manifests: [],
+        warnings: [],
+      } : null,
+      status: 'done' as const,
+    };
+  });
   const [slotB, setSlotB] = useState<DiffSlot>({ file: null, previewUrl: null, result: null, status: 'empty' });
   const inputARef = useRef<HTMLInputElement>(null);
   const inputBRef = useRef<HTMLInputElement>(null);
+
+  // Persistence: save slot A
+  useEffect(() => {
+    if (slotA.result) {
+      storeDiffSlotA({
+        fileName: slotA.result.fileName,
+        fileSize: slotA.result.fileSize,
+        mimeType: slotA.result.mimeType,
+        sha256: slotA.result.sha256,
+        validationState: slotA.result.validationState,
+      });
+    }
+  }, [slotA.result]);
 
   useEffect(() => {
     return () => {
@@ -1362,13 +1398,34 @@ function evaluatePolicy(result: VerificationResult, rules: PolicyRule[]): Policy
 }
 
 function PlaygroundView({ showToast }: { showToast: (msg: string) => void }) {
-  const [rules, setRules] = useState<PolicyRule[]>(DEFAULT_RULES);
+  const [rules, setRules] = useState<PolicyRule[]>(() => {
+    const stored = getStoredPlaygroundRules();
+    if (stored.length === 0) return DEFAULT_RULES;
+    return stored.map((r) => ({
+      ...DEFAULT_RULES.find((d) => d.id === r.id) ?? { id: r.id, type: 'require_assertion' as const, label: r.field },
+      id: r.id,
+      label: r.field,
+      value: r.value,
+      enabled: r.enabled,
+    }));
+  });
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [checks, setChecks] = useState<PolicyCheck[]>([]);
   const [verifying, setVerifying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persistence: save playground rules
+  useEffect(() => {
+    storePlaygroundRules(rules.map((r) => ({
+      id: r.id,
+      field: r.label,
+      operator: r.type,
+      value: r.value ?? '',
+      enabled: r.enabled,
+    })));
+  }, [rules]);
 
   useEffect(() => {
     return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
@@ -3231,10 +3288,49 @@ interface BatchItem {
 let batchIdCounter = 0;
 
 function BatchView({ showToast }: { showToast: (msg: string) => void }) {
-  const [items, setItems] = useState<BatchItem[]>([]);
+  const [items, setItems] = useState<BatchItem[]>(() => {
+    const stored = getStoredMediaBatch();
+    if (stored.length === 0) return [];
+    return stored.map((s) => ({
+      id: s.id,
+      fileName: s.fileName,
+      fileSize: s.fileSize,
+      mimeType: s.mimeType,
+      result: s.sha256 ? {
+        status: (s.status === 'done' ? 'ready' : s.status) as VerificationStatus,
+        fileName: s.fileName,
+        fileSize: s.fileSize,
+        mimeType: s.mimeType,
+        sha256: s.sha256,
+        validationState: (s.validationState || 'Unknown') as ValidationState,
+        manifestCount: s.manifestCount,
+        manifests: [],
+        signedAt: s.signedAt,
+        warnings: [],
+      } : null,
+      status: s.status as 'pending' | 'verifying' | 'done' | 'error',
+    }));
+  });
   const [isProcessing, setIsProcessing] = useState(false);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persistence: save media batch items
+  useEffect(() => {
+    if (items.length > 0) {
+      storeMediaBatch(items.map((it) => ({
+        id: it.id,
+        fileName: it.fileName,
+        fileSize: it.fileSize,
+        mimeType: it.mimeType,
+        sha256: it.result?.sha256 ?? '',
+        status: it.status,
+        validationState: it.result?.validationState ?? null,
+        manifestCount: it.result?.manifestCount ?? 0,
+        signedAt: it.result?.manifests?.[0]?.signedAt ?? null,
+      })));
+    }
+  }, [items]);
 
   async function processFiles(files: FileList | File[]) {
     const fileArray = Array.from(files);
