@@ -59,6 +59,8 @@ import {
   detectUnslopPatterns, applyUnslop,
   type StripperOptions, type UnslopPattern,
 } from './lib/transform';
+import { harperLint, harperFixAll } from './lib/harper';
+import type { HarperLint } from './lib/harper';
 import type { ManifestSummary, ValidationCode, VerificationResult, VerificationStatus, ValidationState } from './lib/types';
 import {
   storeResult, getStoredResult,
@@ -375,10 +377,10 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
                       <span style={{ color: 'var(--color-on-surface-variant)' }}>{s.description}</span>
                     </div>
                   ))}
-                </div>
-              )}
             </div>
-          ) : (
+          )}
+        </div>
+      ) : (
             metadata.sections.filter(s => s.label === activeSection).map((section) => (
               <div key={section.label} className="metadata-entries">
                 {section.entries.map((entry) => (
@@ -2314,6 +2316,9 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
   const [items, setItems] = useState<TextItem[]>(() => {
     const stored = getStoredTextItems();
     if (stored.length === 0) return [];
+    // Update textIdCounter to avoid collisions
+    const maxId = Math.max(...stored.map((s) => s.id ?? 0), 0);
+    textIdCounter = maxId;
     // Restore items from storage (without File objects, analysis is null — will re-analyze)
     return stored.map((s) => ({
       id: s.id ?? 0,
@@ -2334,8 +2339,13 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   // Text simulator state
-  const [textSimResults, setTextSimResults] = useState<{ name: string; description: string; hash: string; preserved: boolean }[]>([]);
+  const [textSimResults, setTextSimResults] = useState<{ name: string; description: string; hash: string; preserved: boolean }[]>(() => getStoredSimResults());
   const [textSimRunning, setTextSimRunning] = useState(false);
+
+  // Persistence: save text simulator results
+  useEffect(() => {
+    if (textSimResults.length > 0) storeSimResults(textSimResults);
+  }, [textSimResults]);
 
   // Sub-tab for detail panel
   type TextSubTab = 'analysis' | 'transform';
@@ -2990,7 +3000,7 @@ function diffLines(original: string, transformed: string): DiffLine[] {
 }
 
 function TextTransformPanel({ inputText, showToast }: { inputText: string; showToast: (msg: string) => void }) {
-  const [mode, setMode] = useState<'strip' | 'unslop'>('strip');
+  const [mode, setMode] = useState<'strip' | 'unslop' | 'harper'>('strip');
   const [viewMode, setViewMode] = useState<'output' | 'diff'>('output');
   const [outputText, setOutputText] = useState('');
   const [hasOutput, setHasOutput] = useState(false);
@@ -3011,6 +3021,10 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
   const [unslopPatterns, setUnslopPatterns] = useState<UnslopPattern[]>([]);
   const [unslopResult, setUnslopResult] = useState<ReturnType<typeof applyUnslop> | null>(null);
 
+  // Harper state
+  const [harperLints, setHarperLints] = useState<HarperLint[]>([]);
+  const [harperRunning, setHarperRunning] = useState(false);
+
   function runStripper() {
     const result = applyStripper(inputText, stripOpts);
     setOutputText(result);
@@ -3026,6 +3040,22 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
     setOutputText(result.text);
     setHasOutput(true);
     showToast(`Unslopped — ${result.changeCount} changes, ${patterns.length} patterns found`);
+  }
+
+  async function runHarper() {
+    setHarperRunning(true);
+    try {
+      const lints = await harperLint(inputText);
+      setHarperLints(lints);
+      const fixed = await harperFixAll(inputText);
+      setOutputText(fixed);
+      setHasOutput(true);
+      showToast(`Harper: ${lints.length} issues found and fixed`);
+    } catch (err) {
+      showToast(`Harper error: ${err instanceof Error ? err.message : 'unknown'}`);
+    } finally {
+      setHarperRunning(false);
+    }
   }
 
   function applyPreset(key: string) {
@@ -3073,6 +3103,13 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
           onClick={() => setMode('unslop')}
         >
           Unslop
+        </button>
+        <button
+          className={`xform-tab ${mode === 'harper' ? 'active' : ''}`}
+          type="button"
+          onClick={() => setMode('harper')}
+        >
+          Harper
         </button>
       </div>
 
@@ -3291,6 +3328,9 @@ function BatchView({ showToast }: { showToast: (msg: string) => void }) {
   const [items, setItems] = useState<BatchItem[]>(() => {
     const stored = getStoredMediaBatch();
     if (stored.length === 0) return [];
+    // Update batchIdCounter to avoid collisions
+    const maxId = Math.max(...stored.map((s) => s.id), 0);
+    batchIdCounter = maxId;
     return stored.map((s) => ({
       id: s.id,
       fileName: s.fileName,
@@ -3630,6 +3670,13 @@ export default function App() {
   useEffect(() => {
     if (sampleLoadedRef.current) return;
     sampleLoadedRef.current = true;
+    // If there's a persisted result, don't load the sample — restore from localStorage
+    const stored = getStoredResult();
+    if (stored) {
+      setIsSample(false);
+      hasRestoredRef.current = true;
+      return;
+    }
     sampleActiveRef.current = true;
     void loadSample();
     return () => { sampleActiveRef.current = false; };
