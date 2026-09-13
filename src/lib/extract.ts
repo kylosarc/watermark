@@ -83,60 +83,82 @@ async function extractPdfText(file: File): Promise<ExtractedText> {
 async function extractPptxText(file: File): Promise<ExtractedText> {
   const arrayBuffer = await file.arrayBuffer();
 
-  let result: { slides?: Array<{ data?: { shapes?: Array<{ text?: string; table?: { rows?: Array<{ cells?: Array<{ text?: string }> }> } }> }; slideNum?: number }> };
+  // Try pptxToJson first
   try {
-    result = await pptxToJson(arrayBuffer, { mediaProcess: false, themeProcess: false });
-  } catch (e) {
-    // pptxToJson can fail on valid PPTX files — fall back to pptxToHtml for text extraction
-    try {
-      const { pptxToHtml } = await import('@fefeding/ppt-parser');
-      const htmlResult = await pptxToHtml(arrayBuffer, { mediaProcess: false, themeProcess: false });
-      const text = htmlResult.slides
-        .map((s) => {
-          // Strip HTML tags to get plain text
-          const div = document.createElement('div');
-          div.innerHTML = s.html;
-          return div.textContent || div.innerText || '';
-        })
-        .filter((t) => t.trim().length > 0)
-        .join('\n\n');
-      return { text, format: 'pptx', pageCount: htmlResult.slides.length };
-    } catch {
-      throw new Error(`Failed to parse PPTX: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
+    const result = await pptxToJson(arrayBuffer, { mediaProcess: false, themeProcess: false });
+    const slides: string[] = [];
 
-  const slides: string[] = [];
+    if (result?.slides && Array.isArray(result.slides)) {
+      for (const slide of result.slides) {
+        const slideTexts: string[] = [];
 
-  if (result?.slides) {
-    for (const slide of result.slides) {
-      const slideTexts: string[] = [];
-      const data = slide.data;
-
-      // Extract text from shapes
-      if (data?.shapes) {
-        for (const shape of data.shapes) {
-          if (shape.text) slideTexts.push(shape.text);
-          // Text in tables
-          if (shape.table?.rows) {
-            for (const row of shape.table.rows) {
-              if (row.cells) {
-                for (const cell of row.cells) {
-                  if (cell.text) slideTexts.push(cell.text);
+        // Extract text from shapes
+        const data = slide?.data;
+        if (data?.shapes && Array.isArray(data.shapes)) {
+          for (const shape of data.shapes) {
+            if (typeof shape?.text === 'string' && shape.text.trim()) slideTexts.push(shape.text);
+            // Text in tables
+            if (shape?.table?.rows && Array.isArray(shape.table.rows)) {
+              for (const row of shape.table.rows) {
+                if (row?.cells && Array.isArray(row.cells)) {
+                  for (const cell of row.cells) {
+                    if (typeof cell?.text === 'string' && cell.text.trim()) slideTexts.push(cell.text);
+                  }
                 }
               }
             }
           }
         }
-      }
 
-      if (slideTexts.length > 0) {
-        slides.push(slideTexts.join(' '));
+        if (slideTexts.length > 0) {
+          slides.push(slideTexts.join(' '));
+        }
       }
     }
+
+    if (slides.length > 0) {
+      return { text: slides.join('\n\n'), format: 'pptx', pageCount: slides.length };
+    }
+    // If pptxToJson returned but no text found, fall through to pptxToHtml
+  } catch {
+    // Fall through to pptxToHtml
   }
 
-  return { text: slides.join('\n\n'), format: 'pptx', pageCount: slides.length };
+  // Fallback: pptxToHtml
+  try {
+    const { pptxToHtml } = await import('@fefeding/ppt-parser');
+    const htmlResult = await pptxToHtml(arrayBuffer, { mediaProcess: false, themeProcess: false });
+    const slides: string[] = [];
+
+    if (htmlResult?.slides && Array.isArray(htmlResult.slides)) {
+      for (const s of htmlResult.slides) {
+        if (typeof s?.html === 'string') {
+          const div = document.createElement('div');
+          div.innerHTML = s.html;
+          const text = div.textContent || div.innerText || '';
+          if (text.trim().length > 0) slides.push(text.trim());
+        }
+      }
+    }
+
+    if (slides.length > 0) {
+      return { text: slides.join('\n\n'), format: 'pptx', pageCount: slides.length };
+    }
+  } catch {
+    // Both methods failed
+  }
+
+  // Last resort: try reading as plain text (some .pptx files are actually text)
+  try {
+    const text = await file.text();
+    if (text.trim().length > 0) {
+      return { text: text.slice(0, 50000), format: 'pptx', pageCount: 1 };
+    }
+  } catch {
+    // Ignore
+  }
+
+  throw new Error(`Could not extract text from PPTX: ${file.name}. The file may be empty or use an unsupported format.`);
 }
 
 async function extractDocxText(file: File): Promise<ExtractedText> {

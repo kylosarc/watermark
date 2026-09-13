@@ -243,64 +243,69 @@ export function applyStripper(text: string, opts: StripperOptions): string {
   if (typeof text !== 'string') return '';
   let result = text;
 
+  // Each step is individually guarded — one failure doesn't break the rest
+  const safe = (fn: () => string, fallback: string = result) => {
+    try { return fn(); } catch { return fallback; }
+  };
+
   // BOM first (before anything else reads it)
-  if (opts.stripBom) result = result.replace(/^\uFEFF/, '');
+  if (opts.stripBom) result = safe(() => result.replace(/^\uFEFF/, ''));
 
   // Invisible characters (watermark-cleaner rules)
-  if (opts.stripInvisibleChars) result = removeInvisibleChars(result);
+  if (opts.stripInvisibleChars) result = safe(() => removeInvisibleChars(result));
 
   // Bidi controls (Trojan Source defense)
-  if (opts.stripBidiControls) result = removeBidiControls(result);
+  if (opts.stripBidiControls) result = safe(() => removeBidiControls(result));
 
   // Typography normalization (smart quotes, dashes, ellipsis)
-  if (opts.normalizeTypography) result = normalizeTypography(result);
+  if (opts.normalizeTypography) result = safe(() => normalizeTypography(result));
 
   // Homoglyph replacement (Cyrillic/Greek lookalikes)
-  if (opts.detectHomoglyphs) result = replaceHomoglyphs(result);
+  if (opts.detectHomoglyphs) result = safe(() => replaceHomoglyphs(result));
 
   // Line endings
-  if (opts.normalizeLineEndings) result = result.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (opts.normalizeLineEndings) result = safe(() => result.replace(/\r\n/g, '\n').replace(/\r/g, '\n'));
 
   // Line numbers (e.g. "  42: some text" or "42\ttext")
-  if (opts.stripLineNumbers) result = result.replace(/^\s*\d+[:\t]\s?/gm, '');
+  if (opts.stripLineNumbers) result = safe(() => result.replace(/^\s*\d+[:\t]\s?/gm, ''));
 
   // Non-printable / control characters (keep \n \t \r)
-  if (opts.stripNonPrintable) result = result.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  if (opts.stripNonPrintable) result = safe(() => result.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ''));
 
   // HTML
-  if (opts.stripHtml) result = stripHtmlTags(result);
+  if (opts.stripHtml) result = safe(() => stripHtmlTags(result));
 
   // Markdown
-  if (opts.stripMarkdown) result = stripMarkdownSyntax(result);
+  if (opts.stripMarkdown) result = safe(() => stripMarkdownSyntax(result));
 
   // Anonymization
-  if (opts.anonymizeEmails) result = result.replace(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, '[EMAIL]');
-  if (opts.anonymizePhones) result = result.replace(/(?:\+?\d{1,3}[\s\-]?)?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}/g, (match) => {
+  if (opts.anonymizeEmails) result = safe(() => result.replace(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, '[EMAIL]'));
+  if (opts.anonymizePhones) result = safe(() => result.replace(/(?:\+?\d{1,3}[\s\-]?)?\(?\d{2,4}\)?[\s\-]?\d{3,4}[\s\-]?\d{3,4}/g, (match) => {
     const digits = match.replace(/\D/g, '');
     return digits.length >= 7 ? '[PHONE]' : match;
-  });
-  if (opts.anonymizeUrls) result = result.replace(/https?:\/\/[^\s<>"')]+|www\.[^\s<>"')]+/g, '[URL]');
-  if (opts.anonymizeNames) result = anonymizeNames(result);
+  }));
+  if (opts.anonymizeUrls) result = safe(() => result.replace(/https?:\/\/[^\s<>"')]+|www\.[^\s<>"')]+/g, '[URL]'));
+  if (opts.anonymizeNames) result = safe(() => anonymizeNames(result));
 
   // PII Redaction
-  if (opts.stripSSN) result = redactSSN(result);
-  if (opts.stripCreditCards) result = redactCreditCards(result);
-  if (opts.stripBankAccounts) result = redactBankAccounts(result);
-  if (opts.stripDriversLicense) result = redactDriversLicense(result);
-  if (opts.stripPassport) result = redactPassport(result);
-  if (opts.stripTaxIds) result = redactTaxIds(result);
-  if (opts.stripApiKeys) result = redactApiKeys(result);
-  if (opts.stripPasswords) result = redactPasswords(result);
-  if (opts.stripAddresses) result = redactAddresses(result);
-  if (opts.stripIban) result = redactIban(result);
+  if (opts.stripSSN) result = safe(() => redactSSN(result));
+  if (opts.stripCreditCards) result = safe(() => redactCreditCards(result));
+  if (opts.stripBankAccounts) result = safe(() => redactBankAccounts(result));
+  if (opts.stripDriversLicense) result = safe(() => redactDriversLicense(result));
+  if (opts.stripPassport) result = safe(() => redactPassport(result));
+  if (opts.stripTaxIds) result = safe(() => redactTaxIds(result));
+  if (opts.stripApiKeys) result = safe(() => redactApiKeys(result));
+  if (opts.stripPasswords) result = safe(() => redactPasswords(result));
+  if (opts.stripAddresses) result = safe(() => redactAddresses(result));
+  if (opts.stripIban) result = safe(() => redactIban(result));
 
   // Whitespace normalization
   if (opts.normalizeWhitespace) {
-    result = result.replace(/ {2,}/g, ' ');
-    result = result.replace(/\t/g, '    ');
+    result = safe(() => result.replace(/ {2,}/g, ' '));
+    result = safe(() => result.replace(/\t/g, '    '));
   }
-  if (opts.trimTrailingWhitespace) result = result.replace(/[ \t]+$/gm, '');
-  if (opts.collapseMultipleBlankLines) result = result.replace(/\n{3,}/g, '\n\n');
+  if (opts.trimTrailingWhitespace) result = safe(() => result.replace(/[ \t]+$/gm, ''));
+  if (opts.collapseMultipleBlankLines) result = safe(() => result.replace(/\n{3,}/g, '\n\n'));
 
   return result;
 }

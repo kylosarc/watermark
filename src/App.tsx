@@ -2875,23 +2875,29 @@ function TextDetailPanel({
   textSimRunning: boolean;
   runTextSimulations: () => void;
 }) {
-  // Analysis may be null for persisted items — show placeholder
-  const a = item.analysis ?? {
-    charCount: item.content.length,
-    wordCount: item.content.split(/\s+/).filter(Boolean).length,
-    sentenceCount: 0,
-    paragraphCount: 0,
-    lineCount: 0,
-    avgWordLength: 0,
-    avgSentenceLength: 0,
-    vocabularyRichness: 0,
-    repetitionScore: 0,
-    sentenceUniformity: 0,
-    burstiness: 0,
-    topWords: [],
-    aiConfidence: 0,
-    aiSignals: ['Analysis not yet run for this restored item — re-analyze to get full results.'],
-  };
+  // Analysis may be null for persisted items — compute from content
+  const a = item.analysis ?? (() => {
+    try {
+      return analyzeText(item.content);
+    } catch {
+      return {
+        charCount: item.content.length,
+        wordCount: item.content.split(/\s+/).filter(Boolean).length,
+        sentenceCount: 0,
+        paragraphCount: 0,
+        lineCount: 0,
+        avgWordLength: 0,
+        avgSentenceLength: 0,
+        vocabularyRichness: 0,
+        repetitionScore: 0,
+        sentenceUniformity: 0,
+        burstiness: 0,
+        topWords: [] as [string, number][],
+        aiConfidence: 0,
+        aiSignals: [] as string[],
+      };
+    }
+  })();
 
   return (
     <div className="txt-results">
