@@ -548,6 +548,58 @@ function normalizeTypography(text: string): string {
   return result;
 }
 
+// ── PDF Text Normalization ────────────────────────────────────────
+// PDFs often extract with letter-spacing artifacts (e.g., "K Y L O S A R C")
+// and scientific notation that grammar checkers don't understand.
+// This normalizes PDF text before Harper runs.
+
+// Protect patterns that should NOT be collapsed or modified
+const PDF_PROTECT_PATTERNS: RegExp[] = [
+  // Chemical formulas: H2O, C6H12O6, NaCl, Fe2O3, CO2
+  /\b[A-Z][a-z]?\d+(?:[A-Z][a-z]?\d*)*\b/g,
+  // Scientific notation: 3.0 x 10^8, 1.5e-3
+  /\d+\.?\d*\s*[x×]\s*10\^?\d+/gi,
+  /\d+\.?\d*e[+-]?\d+/gi,
+  // Units with numbers: 25°C, 0.1 M, 180.16 g/mol
+  /\d+\.?\d*\s*(?:°[CFK]|[kcm]?(?:g|mol|L|m|s|Hz|N|Pa|J|W|V|A|Ω))\b/g,
+  // Math expressions: mc^2, E=mc^2
+  /[A-Z]\s*=\s*[A-Za-z0-9^+\-*/().]+\b/g,
+];
+
+const PDF_LETTER_SPACED = /\b([A-Z])\s+([A-Z])\s+([A-Z])\b/g;
+
+export function normalizePdfText(text: string): string {
+  let result = text;
+
+  // Step 1: Protect scientific/chemical patterns by replacing with placeholders
+  const protectedMap = new Map<string, string>();
+  let placeholderIdx = 0;
+
+  for (const pattern of PDF_PROTECT_PATTERNS) {
+    result = result.replace(pattern, (match) => {
+      const key = `\x00PROTECTED_${placeholderIdx++}\x00`;
+      protectedMap.set(key, match);
+      return key;
+    });
+  }
+
+  // Step 2: Collapse letter-spacing (K Y L O S A R C → KYLOSARC)
+  // Match sequences of 3+ single uppercase letters separated by spaces
+  result = result.replace(/(?:^|\s)(?:[A-Z]\s+){2,}[A-Z](?:\s|$)/g, (match) => {
+    return match.replace(/\s+/g, '');
+  });
+
+  // Step 3: Normalize remaining whitespace
+  result = result.replace(/ {2,}/g, ' ');
+
+  // Step 4: Restore protected patterns
+  for (const [key, value] of protectedMap) {
+    result = result.replace(key, value);
+  }
+
+  return result.trim();
+}
+
 // ── Homoglyph Detection ─────────────────────────────────────────
 
 export interface HomoglyphResult {

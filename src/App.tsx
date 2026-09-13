@@ -57,6 +57,7 @@ import { extractFileMetadata, type FileMetadata, sanitizeMetadata, SANITIZE_PRES
 import {
   applyStripper, STRIPPER_DEFAULTS, STRIPPER_PRESETS,
   detectUnslopPatterns, applyUnslop,
+  normalizePdfText,
   type StripperOptions, type UnslopPattern,
 } from './lib/transform';
 import { harperLint, harperFixAll } from './lib/harper';
@@ -2746,7 +2747,7 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
                   runTextSimulations={runTextSimulations}
                 />
               ) : (
-                <TextTransformPanel inputText={selectedItem.content} showToast={showToast} />
+                <TextTransformPanel inputText={selectedItem.content} format={selectedItem.format} showToast={showToast} />
               )}
             </>
           )}
@@ -3017,12 +3018,15 @@ function diffLines(original: string, transformed: string): DiffLine[] {
   return result;
 }
 
-function TextTransformPanel({ inputText, showToast }: { inputText: string; showToast: (msg: string) => void }) {
+function TextTransformPanel({ inputText, format, showToast }: { inputText: string; format?: string; showToast: (msg: string) => void }) {
   const [mode, setMode] = useState<'strip' | 'unslop' | 'harper'>('strip');
   const [viewMode, setViewMode] = useState<'output' | 'diff'>('output');
   const [outputText, setOutputText] = useState('');
   const [hasOutput, setHasOutput] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Check if Harper should be available (not for PDFs by default)
+  const harperAvailable = format !== 'pdf';
 
   // Stripper state
   const [stripOpts, setStripOpts] = useState<StripperOptions>(() => {
@@ -3063,9 +3067,11 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
   async function runHarper() {
     setHarperRunning(true);
     try {
-      const lints = await harperLint(inputText);
+      // Normalize PDF text to remove letter-spacing artifacts
+      const textToCheck = format === 'pdf' ? normalizePdfText(inputText) : inputText;
+      const lints = await harperLint(textToCheck);
       setHarperLints(lints);
-      const fixed = await harperFixAll(inputText);
+      const fixed = await harperFixAll(textToCheck);
       setOutputText(fixed);
       setHasOutput(true);
       showToast(`Harper: ${lints.length} issues found and fixed`);
@@ -3126,6 +3132,8 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
           className={`xform-tab ${mode === 'harper' ? 'active' : ''}`}
           type="button"
           onClick={() => setMode('harper')}
+          disabled={!harperAvailable}
+          title={!harperAvailable ? 'Harper not available for PDF text (letter-spacing artifacts)' : ''}
         >
           Harper Grammar
         </button>
