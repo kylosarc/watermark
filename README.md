@@ -31,6 +31,27 @@ Watermark is a local-first web application for inspecting C2PA Content Credentia
 - Explicit handling for missing, invalid, untrusted, and unsupported credentials
 - Browser-only processing with no application backend
 
+## Important notes
+
+**This software is under active development and contains known bugs.** While we strive for accuracy, results may not always be as expected.
+
+### Text processing limitations
+
+- Not all text documents are suitable for processing in all modes. PDFs with letter-spacing (e.g., stylized headers like "K Y L O S A R C") may produce garbled output when using grammar checking features.
+- Scientific notation, chemical formulas, and technical content may be incorrectly flagged or modified by grammar/linting tools.
+- Text extraction from PDFs, Word documents, and PowerPoint files may lose formatting, embedded images, or complex layouts.
+- The unsloper and stripper tools are designed for prose text and may not work well on code, technical documentation, or structured data.
+
+### Video and media limitations
+
+- Video files do not always load a playable preview or reference thumbnail. In these cases, you will still see watermarking details, C2PA manifest information, and metadata — but no video playback.
+- Large video files may take longer to process or may not fully load in the browser.
+- Some media formats may not be fully supported by the C2PA SDK.
+
+### Your files are safe
+
+**Original documents and media are never overwritten by Watermark.** All processing happens in memory and produces a new output — your source files remain completely untouched on disk. Even if results are unexpected or processing fails, there is no risk to your original files.
+
 ## Run locally
 
 ```bash
@@ -50,11 +71,15 @@ npm test
 
 ## Architecture
 
-- `src/App.tsx` contains the drop zone, preview, and result views.
+- `src/App.tsx` contains the drop zone, preview, result views, and text/batch views.
 - `src/lib/c2pa.ts` owns SDK initialization and file verification.
 - `src/lib/verification.ts` normalizes SDK manifest data into a stable UI model.
 - `src/lib/file.ts` contains MIME detection, byte formatting, and SHA-256 utilities.
 - `src/lib/types.ts` defines the application verification contract.
+- `src/lib/transform.ts` provides text stripping, PII redaction, unsloping, and PDF normalization.
+- `src/lib/harper.ts` integrates the Harper grammar checker (WASM-based, browser-local).
+- `src/lib/metadata.ts` handles file metadata extraction, sanitization, and editing.
+- `src/lib/extract.ts` extracts text from PDFs, Word documents, and PowerPoint files.
 
 The C2PA SDK runs in a Web Worker with its WASM binary loaded as a Vite asset. The app does not currently create or re-sign manifests; editing and signing require a separate key-management and provenance update design.
 
@@ -64,11 +89,13 @@ A trusted C2PA result means the SDK validated the manifest signature, content bi
 
 ## Next modules
 
-1. Privacy-safe metadata sanitizer with an explicit field allowlist.
-2. Provenance-aware crop, resize, and compression workflow.
-3. Local lineage dashboard backed by IndexedDB.
-4. AI-detection appeal evidence export.
-5. Educational views for C2PA, SynthID, statistical watermarking, and steganalysis.
+1. ✅ Privacy-safe metadata sanitizer with an explicit field allowlist.
+2. ✅ Text analysis with AI detection, grammar checking (Harper), and unsloping.
+3. ✅ File metadata viewer and editor.
+4. Provenance-aware crop, resize, and compression workflow.
+5. Local lineage dashboard backed by IndexedDB.
+6. AI-detection appeal evidence export.
+7. Educational views for C2PA, SynthID, statistical watermarking, and steganalysis.
 
 ## References
 
