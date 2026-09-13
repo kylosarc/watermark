@@ -3124,8 +3124,7 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
           <span className="xform-source-stats">{inputText.length.toLocaleString()} chars</span>
         </div>
         <div className="xform-source-content">
-          {inputText.slice(0, 2000)}
-          {inputText.length > 2000 && <span className="xform-source-more">... ({(inputText.length - 2000).toLocaleString()} more chars)</span>}
+          {inputText}
         </div>
       </div>
 

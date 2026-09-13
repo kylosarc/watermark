@@ -4356,17 +4356,10 @@ pre {
   font-size: 0.7rem;
   line-height: 1.5;
   color: var(--color-on-surface);
-  max-height: 150px;
+  max-height: 300px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.xform-source-more {
-  display: block;
-  margin-top: 4px;
-  color: var(--color-outline);
-  font-style: italic;
 }
 
 .xform-tabs {
