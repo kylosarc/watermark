@@ -539,9 +539,9 @@ function normalizeTypography(text: string): string {
     result = result.replaceAll(unicode, ascii);
   }
 
-  // Em dash (—) and en dash (–) → comma or hyphen per context
-  // Spaced em/en dash → comma: "fast — slow" → "fast, slow"
-  result = result.replace(/\s+[—–]\s+/g, ', ');
+  // Em dash (—) and en dash (–) → hyphen per context
+  // Spaced em/en dash → spaced hyphen: "word — word" → "word - word"
+  result = result.replace(/\s+[—–]\s+/g, ' - ');
   // Unspaced em/en dash → hyphen
   result = result.replace(/[—–]/g, '-');
 
