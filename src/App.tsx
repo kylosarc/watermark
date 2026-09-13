@@ -3051,6 +3051,7 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
     const result = applyStripper(inputText, stripOpts);
     setOutputText(result);
     setHasOutput(true);
+    setViewMode('diff'); // Auto-show diff after transformation
     showToast('Text stripped');
   }
 
@@ -3061,6 +3062,7 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
     setUnslopResult(result);
     setOutputText(result.text);
     setHasOutput(true);
+    setViewMode('diff'); // Auto-show diff after transformation
     showToast(`Unslopped — ${result.changeCount} changes, ${patterns.length} patterns found`);
   }
 
@@ -3074,6 +3076,7 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
       const fixed = await harperFixAll(textToCheck);
       setOutputText(fixed);
       setHasOutput(true);
+      setViewMode('diff'); // Auto-show diff after transformation
       showToast(`Harper: ${lints.length} issues found and fixed`);
     } catch (err) {
       showToast(`Harper error: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -3113,6 +3116,19 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
 
   return (
     <div className="xform-panel">
+      {/* Source text viewer */}
+      <div className="xform-source">
+        <div className="xform-source-header">
+          <FileText size={14} />
+          <span>Source Text</span>
+          <span className="xform-source-stats">{inputText.length.toLocaleString()} chars</span>
+        </div>
+        <div className="xform-source-content">
+          {inputText.slice(0, 2000)}
+          {inputText.length > 2000 && <span className="xform-source-more">... ({(inputText.length - 2000).toLocaleString()} more chars)</span>}
+        </div>
+      </div>
+
       <div className="xform-tabs">
         <button
           className={`xform-tab ${mode === 'strip' ? 'active' : ''}`}

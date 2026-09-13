@@ -4324,6 +4324,51 @@ pre {
   gap: 16px;
 }
 
+.xform-source {
+  background: rgba(18, 20, 23, 0.6);
+  border: 1px solid rgba(61, 73, 76, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.xform-source-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(18, 20, 23, 0.8);
+  border-bottom: 1px solid rgba(61, 73, 76, 0.2);
+  color: var(--color-outline);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.xform-source-stats {
+  margin-left: auto;
+  font-size: 0.65rem;
+  color: var(--color-outline);
+  opacity: 0.7;
+}
+
+.xform-source-content {
+  padding: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--color-on-surface);
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.xform-source-more {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-outline);
+  font-style: italic;
+}
+
 .xform-tabs {
   display: flex;
   gap: 4px;
