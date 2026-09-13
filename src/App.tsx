@@ -274,11 +274,13 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
           <span style={{ fontWeight: 600, color: 'var(--color-on-surface)' }}>File Metadata & Binary Analysis</span>
           <div style={{ display: 'flex', gap: 6 }}>
             <button className="action-tactile button-ghost" type="button" onClick={() => { setEditMode(false); setEditField(null); }}>
-              <Eye size={13} /> View
+              <Eye size={13} /> {editMode ? 'Done' : 'View'}
             </button>
-            <button className="action-tactile button-ghost" type="button" onClick={() => setEditMode(true)}>
-              <Pencil size={13} /> Edit
-            </button>
+            {!editMode && (
+              <button className="action-tactile button-ghost" type="button" onClick={() => setEditMode(true)}>
+                <Pencil size={13} /> Edit
+              </button>
+            )}
             <button className="action-tactile button-ghost" type="button" onClick={downloadSanitized}>
               <Download size={13} /> Export JSON
             </button>
@@ -322,6 +324,11 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
               <button className="action-tactile button-primary" type="button" onClick={saveEdit} style={{ fontSize: 12 }}>Save</button>
               <button className="action-tactile button-ghost" type="button" onClick={() => { setEditMode(false); setEditField(null); }} style={{ fontSize: 12 }}>Cancel</button>
             </div>
+          </div>
+        )}
+        {editMode && !editField && (
+          <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(76, 215, 246, 0.05)', borderRadius: 6, border: '1px solid rgba(76, 215, 246, 0.2)', fontSize: 12, color: 'var(--color-primary)' }}>
+            Click the pencil icon on any field below to edit it. Click "Done" when finished.
           </div>
         )}
 
@@ -392,7 +399,7 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
                         <a href={entry.value} target="_blank" rel="noopener" style={{ color: 'var(--color-primary)' }}>{entry.value}</a>
                       ) : entry.value}
                     </span>
-                    {editableKeys.has(entry.key) && (
+                    {editMode && editableKeys.has(entry.key) && (
                       <button
                         className="action-tactile button-ghost"
                         type="button"
@@ -3361,6 +3368,7 @@ interface BatchItem {
   mimeType: string;
   result: VerificationResult | null;
   status: 'pending' | 'verifying' | 'done' | 'error';
+  restored?: boolean; // true if restored from localStorage (file not available)
 }
 
 let batchIdCounter = 0;
@@ -3390,6 +3398,7 @@ function BatchView({ showToast }: { showToast: (msg: string) => void }) {
         warnings: [],
       } : null,
       status: s.status as 'pending' | 'verifying' | 'done' | 'error',
+      restored: true,
     }));
   });
   const [isProcessing, setIsProcessing] = useState(false);
@@ -3612,6 +3621,11 @@ function BatchView({ showToast }: { showToast: (msg: string) => void }) {
       )}
 
       {/* Results Table */}
+      {items.length > 0 && items.some(i => i.restored) && (
+        <div style={{ padding: '8px 12px', background: 'rgba(76, 215, 246, 0.05)', borderRadius: 6, border: '1px solid rgba(76, 215, 246, 0.2)', fontSize: 12, color: 'var(--color-primary)' }}>
+          Some entries are cached from a previous session. Drop the files again to re-verify them.
+        </div>
+      )}
       {items.length > 0 ? (
         <div className="batch-table-wrap">
           <table className="batch-table">
@@ -3636,7 +3650,10 @@ function BatchView({ showToast }: { showToast: (msg: string) => void }) {
                 return (
                   <tr key={item.id} className="stagger-row">
                     <td className="batch-cell-mono">{idx + 1}</td>
-                    <td className="batch-cell-name" title={item.fileName}>{item.fileName}</td>
+                    <td className="batch-cell-name" title={item.fileName}>
+                      {item.fileName}
+                      {item.restored && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--color-outline)', fontStyle: 'italic' }}>(cached)</span>}
+                    </td>
                     <td className="batch-cell-mono">{formatBytes(item.fileSize)}</td>
                     <td className="batch-cell-mono">{item.mimeType}</td>
                     <td>
