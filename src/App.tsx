@@ -29,6 +29,7 @@ import {
   KeyRound,
   Layers3,
   List,
+  Loader2,
   Lock,
   LockKeyhole,
   Maximize,
@@ -3105,7 +3106,7 @@ function diffLines(original: string, transformed: string): DiffLine[] {
 }
 
 function TextTransformPanel({ inputText, format, showToast }: { inputText: string; format?: string; showToast: (msg: string) => void }) {
-  const [mode, setMode] = useState<'strip' | 'unslop' | 'harper'>('strip');
+  const [mode, setMode] = useState<'strip' | 'improve' | 'harper'>('strip');
   const [viewMode, setViewMode] = useState<'output' | 'diff'>('output');
   const [outputText, setOutputText] = useState('');
   const [hasOutput, setHasOutput] = useState(false);
@@ -3231,11 +3232,11 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
           Strip / Obfuscate
         </button>
         <button
-          className={`xform-tab ${mode === 'unslop' ? 'active' : ''}`}
+          className={`xform-tab ${mode === 'improve' ? 'active' : ''}`}
           type="button"
-          onClick={() => setMode('unslop')}
+          onClick={() => setMode('improve')}
         >
-          Unslop
+          Improve Text
         </button>
         <button
           className={`xform-tab ${mode === 'harper' ? 'active' : ''}`}
@@ -3244,7 +3245,7 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
           disabled={!harperAvailable}
           title={!harperAvailable ? 'Harper not available for PDF text (letter-spacing artifacts)' : ''}
         >
-          Harper Grammar
+          Grammar Only
         </button>
       </div>
 
@@ -3305,14 +3306,14 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
             Strip Text
           </button>
         </div>
-      ) : (
+      ) : mode === 'improve' ? (
         <div className="xform-body">
           <div className="xform-unslop-intro">
-            <p>Detects AI-typical phrases, inflated language, verbose synonyms, chatbot patterns, and formatting tells. Removes or replaces them with direct alternatives.</p>
+            <p>Cleans up verbose language, AI-typical phrases, inflated synonyms, passive constructions, chatbot filler, and formatting tells — all in one pass. Replaces with direct, natural alternatives.</p>
           </div>
 
           <button className="action-tactile button-primary xform-run" type="button" onClick={runUnsloper} disabled={!inputText}>
-            <Sparkles size={15} /> Detect & Unslop
+            <Sparkles size={15} /> Improve Text
           </button>
 
           {unslopResult && (
@@ -3364,6 +3365,39 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
                     <span className="xform-unslop-count">×{pat.count}</span>
                     <span className="xform-unslop-arrow">→</span>
                     <span className="xform-unslop-replace">{pat.replacement}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="xform-body">
+          <div className="xform-unslop-intro">
+            <p>Grammar and spelling only — powered by Harper (WASM). Catches typos, grammar errors, and spelling mistakes without changing your writing style.</p>
+          </div>
+
+          <button className="action-tactile button-primary xform-run" type="button" onClick={runHarper} disabled={!inputText || harperRunning}>
+            {harperRunning ? <><Loader2 size={15} className="spin" /> Checking…</> : <><Check size={15} /> Check Grammar</>}
+          </button>
+
+          {harperLints.length > 0 && (
+            <div className="xform-unslop-results">
+              <div className="xform-unslop-summary">
+                <div className="xform-unslop-stat">
+                  <span>Issues found</span>
+                  <strong>{harperLints.length}</strong>
+                </div>
+              </div>
+              <div className="xform-unslop-list">
+                {harperLints.map((lint, i) => (
+                  <div key={i} className="xform-unslop-item">
+                    <span className="xform-unslop-phrase">"{(format === 'pdf' ? normalizePdfText(inputText) : inputText).slice(Math.max(0, lint.start), lint.end)}"</span>
+                    <span className="xform-unslop-cat-badge">{lint.kind}</span>
+                    <span className="xform-unslop-replace">{lint.message}</span>
+                    {lint.suggestions.length > 0 && (
+                      <span className="xform-unslop-arrow">→ "{lint.suggestions[0]}"</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -4469,10 +4503,10 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+            </div>
+          )}
+        </div>
+      )}
 
             {/* TAB: Cryptography */}
             {inspectorTab === 'cryptography' && (
