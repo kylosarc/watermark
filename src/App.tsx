@@ -734,14 +734,14 @@ function DiffView({ showToast }: { showToast: (msg: string) => void }) {
                     <span className="diff-slot-name" title={slot.file?.name ?? ''}>{slot.file?.name}</span>
                     <span className="diff-slot-meta">{slot.file ? formatBytes(slot.file.size) : ''} • {slot.file?.type}</span>
                   </div>
-                  {slot.status === 'verifying' && (
-                    <div className="diff-slot-overlay">
-                      <RefreshCw size={24} className="spin" style={{ color: 'var(--color-primary)' }} />
-                      <span>Verifying...</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
+                   {slot.status === 'verifying' && (
+                     <div className="diff-slot-overlay">
+                       <RefreshCw size={24} className="spin" style={{ color: 'var(--color-primary)' }} />
+                       <span>Verifying...</span>
+                     </div>
+                   )}
+        </div>
+      ) : (
                 <div className="diff-slot-empty" onClick={() => inputRef.current?.click()}>
                   <Upload size={32} style={{ color: 'var(--color-outline)' }} />
                   <strong>Drop {side === 'A' ? 'original' : 'modified'} file</strong>
@@ -2698,25 +2698,27 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
                     )}
                     {it.status === 'error' && <span className="txt-batch-item-status error">Error</span>}
                   </div>
-                  <div className="txt-batch-item-actions">
-                    {it.status === 'done' && (
-                      <>
-                        <button
-                          className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'analysis' ? 'active' : ''}`}
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('analysis'); }}
-                        >
-                          <Info size={13} /> Analysis
-                        </button>
-                        <button
-                          className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'transform' ? 'active' : ''}`}
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('transform'); }}
-                        >
-                          <Sparkles size={13} /> Strip / Unslop
-                        </button>
-                      </>
-                    )}
+                    <div className="txt-batch-item-actions">
+                      {it.status === 'done' && (
+                        <>
+                          <button
+                            className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'analysis' ? 'active' : ''}`}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('analysis'); }}
+                            title="View AI detection, readability stats, vocabulary analysis, and C2PA status"
+                          >
+                            <Info size={13} /> Analysis
+                          </button>
+                          <button
+                            className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'transform' ? 'active' : ''}`}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('transform'); }}
+                            title="Strip formatting, redact PII, unslop AI text, or fix grammar with Harper"
+                          >
+                            <Sparkles size={13} /> Strip / Unslop
+                          </button>
+                        </>
+                      )}
                     <button
                       className="txt-batch-item-remove"
                       type="button"
@@ -3109,7 +3111,7 @@ function TextTransformPanel({ inputText, showToast }: { inputText: string; showT
           type="button"
           onClick={() => setMode('harper')}
         >
-          Harper
+          Harper Grammar
         </button>
       </div>
 

@@ -4222,18 +4222,32 @@ pre {
   flex-shrink: 0;
   font-size: 11px;
   white-space: nowrap;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
 }
 
 .txt-batch-item-btn:hover {
   color: var(--color-primary);
   background: var(--color-primary-dim);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(76, 215, 246, 0.15);
+}
+
+.txt-batch-item-btn:active {
+  transform: translateY(0) scale(0.97);
+  transition-duration: 0.05s;
 }
 
 .txt-batch-item-btn.active {
   color: var(--color-primary);
   border-color: rgba(76, 215, 246, 0.3);
   background: var(--color-primary-dim);
+  box-shadow: 0 0 12px rgba(76, 215, 246, 0.12);
+  animation: btn-pulse 2s ease-in-out infinite;
+}
+
+@keyframes btn-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(76, 215, 246, 0.1); }
+  50% { box-shadow: 0 0 16px rgba(76, 215, 246, 0.25); }
 }
 
 .txt-batch-item-remove {
@@ -4247,12 +4261,18 @@ pre {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease;
 }
 
 .txt-batch-item-remove:hover {
   color: #f43f5e;
   background: rgba(244, 63, 94, 0.1);
+  transform: scale(1.15);
+}
+
+.txt-batch-item-remove:active {
+  transform: scale(0.9);
+  transition-duration: 0.05s;
 }
 
 .txt-batch-summary {
@@ -4323,12 +4343,18 @@ pre {
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
 }
 
 .xform-tab:hover {
   color: var(--color-on-surface);
   background: rgba(76, 215, 246, 0.06);
+  transform: translateY(-1px);
+}
+
+.xform-tab:active {
+  transform: translateY(0) scale(0.97);
+  transition-duration: 0.05s;
 }
 
 .xform-tab.active {
@@ -4360,6 +4386,16 @@ pre {
   font-size: 0.6875rem !important;
   padding: 3px 10px !important;
   text-transform: capitalize;
+  transition: transform 0.15s ease, box-shadow 0.2s ease !important;
+}
+
+.xform-preset-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.xform-preset-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.95);
+  transition-duration: 0.05s;
 }
 
 /* Options grid */
@@ -4404,6 +4440,17 @@ pre {
 
 .xform-run {
   align-self: flex-start;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.xform-run:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(76, 215, 246, 0.2);
+}
+
+.xform-run:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+  transition-duration: 0.05s;
 }
 
 /* Unsloper results */
@@ -4548,6 +4595,19 @@ pre {
 .xform-output-actions {
   display: flex;
   gap: 4px;
+}
+
+.xform-output-actions .action-tactile {
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.xform-output-actions .action-tactile:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.xform-output-actions .action-tactile:active:not(:disabled) {
+  transform: translateY(0) scale(0.95);
+  transition-duration: 0.05s;
 }
 
 .xform-output-text {
