@@ -52,22 +52,40 @@ export async function harperLint(text: string): Promise<HarperLint[]> {
 
 /**
  * Apply all first-suggestions from Harper lints to fix grammar/spelling.
- * Returns the corrected text.
+ * Rebuilds text from original spans instead of applying suggestions incrementally
+ * (which causes span invalidation as text changes).
  */
 export async function harperFixAll(text: string): Promise<string> {
   const linter = await getLinter();
   const lints = await linter.lint(text);
 
-  let result = text;
-  // Apply suggestions in reverse order so earlier spans stay valid
-  const sorted = [...lints].sort((a, b) => b.span().start - a.span().start);
+  if (lints.length === 0) return text;
 
-  for (const lint of sorted) {
-    const suggestions = lint.suggestions();
-    if (suggestions.length > 0) {
-      result = await linter.applySuggestion(result, lint, suggestions[0]);
-    }
+  // Sort by start position
+  const sorted = [...lints]
+    .map((l) => ({ lint: l, span: l.span(), suggestions: l.suggestions() }))
+    .filter((item) => item.suggestions.length > 0)
+    .sort((a, b) => a.span.start - b.span.start);
+
+  if (sorted.length === 0) return text;
+
+  // Rebuild text by replacing each span with its first suggestion
+  let result = '';
+  let cursor = 0;
+
+  for (const { span, suggestions } of sorted) {
+    // Skip overlapping spans
+    if (span.start < cursor) continue;
+
+    // Append text before this span
+    result += text.slice(cursor, span.start);
+    // Append the suggestion replacement
+    result += suggestions[0].get_replacement_text();
+    cursor = span.end;
   }
+
+  // Append remaining text after last span
+  result += text.slice(cursor);
 
   return result;
 }
