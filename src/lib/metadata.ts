@@ -288,6 +288,18 @@ async function extractImageMetadata(file: File): Promise<MetadataSection[]> {
 // ── Main Entry Point ───────────────────────────────────────────
 
 export async function extractFileMetadata(file: File, sha256: string): Promise<FileMetadata> {
+  if (!file || typeof sha256 !== 'string') {
+    return {
+      fileName: file?.name ?? 'unknown',
+      fileSize: file?.size ?? 0,
+      mimeType: file?.type ?? 'unknown',
+      sha256: sha256 || '',
+      sections: [],
+      binary: { magicBytes: '', detectedType: 'unknown', fileSize: file?.size ?? 0, entropy: 0, hexPreview: '', structure: [] },
+      raw: {},
+    };
+  }
+
   const arrayBuffer = await file.arrayBuffer();
   const data = new Uint8Array(arrayBuffer);
 
@@ -382,6 +394,10 @@ export function sanitizeMetadata(
   metadata: FileMetadata,
   keepSections: string[]
 ): SanitizeResult {
+  if (!metadata || !Array.isArray(metadata.sections)) {
+    return { sections: [], removedCount: 0, keptCount: 0 };
+  }
+
   const kept: MetadataEntry[] = [];
   const removed: MetadataEntry[] = [];
 
@@ -443,6 +459,7 @@ export function applyMetadataEdit(
   key: string,
   newValue: string
 ): FileMetadata {
+  if (!metadata || typeof section !== 'string' || typeof key !== 'string') return metadata;
   const updated = { ...metadata, sections: metadata.sections.map((s) => ({ ...s, entries: [...s.entries] })) };
   const sec = updated.sections.find((s) => s.label === section);
   if (sec) {

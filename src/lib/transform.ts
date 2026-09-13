@@ -240,6 +240,7 @@ export const STRIPPER_DEFAULTS: StripperOptions = {
 };
 
 export function applyStripper(text: string, opts: StripperOptions): string {
+  if (typeof text !== 'string') return '';
   let result = text;
 
   // BOM first (before anything else reads it)
@@ -529,6 +530,7 @@ function removeBidiControls(text: string): string {
 // ── Typography Normalization (watermark-cleaner rules) ──────────
 
 function normalizeTypography(text: string): string {
+  if (typeof text !== 'string') return '';
   let result = text;
 
   // Smart quotes → ASCII
@@ -571,6 +573,7 @@ const PDF_PROTECT_PATTERNS: RegExp[] = [
 const PDF_LETTER_SPACED = /\b([A-Z])\s+([A-Z])\s+([A-Z])\b/g;
 
 export function normalizePdfText(text: string): string {
+  if (typeof text !== 'string') return '';
   let result = text;
 
   // Step 1: Protect scientific/chemical patterns by replacing with placeholders
@@ -897,6 +900,7 @@ const TRANSITION_STARTERS = new Set([
 ]);
 
 export function detectUnslopPatterns(text: string): UnslopPattern[] {
+  if (typeof text !== 'string') return [];
   const lower = text.toLowerCase();
   const patterns: UnslopPattern[] = [];
 
@@ -977,6 +981,7 @@ export function detectUnslopPatterns(text: string): UnslopPattern[] {
 }
 
 export function applyUnslop(text: string, patterns?: UnslopPattern[]): UnslopResult {
+  if (typeof text !== 'string') return { text: '', patternsFound: [], changeCount: 0, originalLength: 0, transformedLength: 0 };
   const detected = patterns ?? detectUnslopPatterns(text);
   let result = text;
   let changeCount = 0;

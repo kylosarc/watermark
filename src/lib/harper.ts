@@ -34,6 +34,7 @@ async function getLinter() {
  * Lint text with Harper and return structured results.
  */
 export async function harperLint(text: string): Promise<HarperLint[]> {
+  if (typeof text !== 'string' || text.length === 0) return [];
   const linter = await getLinter();
   const lints = await linter.lint(text);
 
@@ -56,6 +57,7 @@ export async function harperLint(text: string): Promise<HarperLint[]> {
  * (which causes span invalidation as text changes).
  */
 export async function harperFixAll(text: string): Promise<string> {
+  if (typeof text !== 'string' || text.length === 0) return text;
   const linter = await getLinter();
   const lints = await linter.lint(text);
 

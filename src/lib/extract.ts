@@ -19,6 +19,7 @@ const PPTX_EXTENSIONS = new Set(['.pptx', '.ppt']);
 const DOCX_EXTENSIONS = new Set(['.docx', '.doc']);
 
 export function detectFormat(fileName: string): FileFormat {
+  if (typeof fileName !== 'string') return 'unknown';
   const ext = fileName.toLowerCase().match(/\.[^.]+$/)?.[0] ?? '';
   if (TEXT_EXTENSIONS.has(ext)) return 'text';
   if (PDF_EXTENSIONS.has(ext)) return 'pdf';

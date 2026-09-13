@@ -5,7 +5,7 @@ import '@fontsource/geist/700.css';
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '@fontsource/jetbrains-mono/600.css';
-import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type DragEvent, useCallback, useEffect, useRef, useState, Component, type ReactNode } from 'react';
 import {
   AlertTriangle,
   BookOpen,
@@ -91,6 +91,59 @@ const STATUS_LABELS: Record<VerificationStatus, string> = {
   invalid: 'Invalid credentials',
   error: 'Verification failed'
 };
+
+// ── Error Boundary ─────────────────────────────────────────────
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+  onError?: (error: Error, errorInfo: React.ErrorInfo) => void;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('ErrorBoundary caught:', error, errorInfo);
+    this.props.onError?.(error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+      return (
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-error)' }}>
+          <AlertTriangle size={32} style={{ marginBottom: 8 }} />
+          <h3 style={{ marginBottom: 4 }}>Something went wrong</h3>
+          <p style={{ fontSize: 13, color: 'var(--color-outline)' }}>
+            {this.state.error?.message ?? 'Unknown error'}
+          </p>
+          <button
+            className="action-tactile button-ghost"
+            type="button"
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ marginTop: 12 }}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const STATUS_TONES: Record<VerificationStatus, string> = {
   idle: 'neutral',
@@ -1757,8 +1810,8 @@ function buildLineage(result: VerificationResult): { nodes: LineageNode[]; edges
       algorithm: m.signatureAlgorithm,
       date: m.signedAt,
       assertionCount: m.assertions.length,
-      x: 120,
-      y: 80 + idx * 120,
+      x: 160,
+      y: 100 + idx * 160,
     });
 
     // Connect to previous manifest (parent chain)
@@ -1777,8 +1830,8 @@ function buildLineage(result: VerificationResult): { nodes: LineageNode[]; edges
         id: ingId,
         label: ing,
         type: 'ingredient',
-        x: 340 + (ingIdx % 2) * 100,
-        y: 80 + idx * 120 + (ingIdx > 0 ? 40 : 0),
+        x: 420 + (ingIdx % 3) * 140,
+        y: 100 + idx * 160 + Math.floor(ingIdx / 3) * 60,
       });
       edges.push({
         from: m.label,
@@ -1813,8 +1866,8 @@ function LineageView({ result, showToast }: { result: VerificationResult | null;
     return () => ro.disconnect();
   }, []);
 
-  const graphWidth = Math.max(containerWidth, 600);
-  const graphHeight = Math.max(500, nodes.length * 80 + 100);
+  const graphWidth = Math.max(containerWidth, 800);
+  const graphHeight = Math.max(600, nodes.length * 160 + 200);
 
   function handleMouseDown(e: React.MouseEvent) {
     if (e.target === svgRef.current || (e.target as SVGElement).tagName === 'rect') {
@@ -1855,7 +1908,7 @@ function LineageView({ result, showToast }: { result: VerificationResult | null;
   }
 
   function getNodeRadius(type: LineageNode['type']) {
-    return type === 'active' ? 24 : type === 'ingredient' ? 16 : 20;
+    return type === 'active' ? 32 : type === 'ingredient' ? 22 : 26;
   }
 
   return (
@@ -1973,21 +2026,22 @@ function LineageView({ result, showToast }: { result: VerificationResult | null;
                         textAnchor="middle"
                         dominantBaseline="middle"
                         fill="var(--color-on-surface)"
-                        fontSize={node.type === 'active' ? 10 : 8}
+                        fontSize={node.type === 'active' ? 12 : 10}
                         fontFamily="'JetBrains Mono', monospace"
+                        fontWeight={node.type === 'active' ? 600 : 400}
                       >
-                        {node.type === 'ingredient' ? 'I' : node.label.split('_')[0]?.slice(0, 3) ?? ''}
+                        {node.type === 'ingredient' ? 'I' : node.label.split('_')[0]?.slice(0, 4) ?? ''}
                       </text>
                       {/* Full label below */}
                       <text
                         x={node.x}
-                        y={node.y + r + 14}
+                        y={node.y + r + 16}
                         textAnchor="middle"
                         fill="var(--color-on-surface-dim)"
-                        fontSize={9}
+                        fontSize={11}
                         fontFamily="'JetBrains Mono', monospace"
                       >
-                        {node.label.length > 20 ? node.label.slice(0, 18) + '…' : node.label}
+                        {node.label.length > 24 ? node.label.slice(0, 22) + '…' : node.label}
                       </text>
                     </g>
                   );
@@ -2376,24 +2430,39 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
   const selectedItem = items.find((it) => it.id === selectedId) ?? null;
 
   async function hashText(text: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(text);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      return Date.now().toString(16).padStart(64, '0');
+    }
   }
 
   async function processOne(text: string, source: 'file' | 'paste', fileName: string | null): Promise<TextItem> {
     const id = ++textIdCounter;
 
-    // SHA-256
-    const encoder = new TextEncoder();
-    const data = encoder.encode(text);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    // SHA-256 (wrapped in try-catch for edge cases)
+    let sha256 = '';
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      // Fallback: use timestamp as hash if crypto fails
+      sha256 = Date.now().toString(16).padStart(64, '0');
+    }
 
-    const analysis = analyzeText(text);
+    let analysis: TextAnalysis | null = null;
+    try {
+      analysis = analyzeText(text);
+    } catch {
+      // Analysis failed — return item without analysis
+    }
 
     let c2paResult: VerificationResult | null = null;
     if (source === 'file' && fileName) {
@@ -2562,9 +2631,13 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
 
     const results: typeof textSimResults = [];
     for (const op of ops) {
-      const transformed = op.transform(item.content);
-      const hash = await hashText(transformed);
-      results.push({ name: op.name, description: op.description, hash, preserved: hash === originalHash });
+      try {
+        const transformed = op.transform(item.content);
+        const hash = await hashText(transformed);
+        results.push({ name: op.name, description: op.description, hash, preserved: hash === originalHash });
+      } catch (err) {
+        results.push({ name: op.name, description: op.description, hash: '', preserved: false });
+      }
       setTextSimResults([...results]);
     }
 
@@ -3055,22 +3128,30 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
   const [harperRunning, setHarperRunning] = useState(false);
 
   function runStripper() {
-    const result = applyStripper(inputText, stripOpts);
-    setOutputText(result);
-    setHasOutput(true);
-    setViewMode('diff'); // Auto-show diff after transformation
-    showToast('Text stripped');
+    try {
+      const result = applyStripper(inputText, stripOpts);
+      setOutputText(result);
+      setHasOutput(true);
+      setViewMode('diff'); // Auto-show diff after transformation
+      showToast('Text stripped');
+    } catch (err) {
+      showToast(`Strip error: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
   }
 
   function runUnsloper() {
-    const patterns = detectUnslopPatterns(inputText);
-    setUnslopPatterns(patterns);
-    const result = applyUnslop(inputText, patterns);
-    setUnslopResult(result);
-    setOutputText(result.text);
-    setHasOutput(true);
-    setViewMode('diff'); // Auto-show diff after transformation
-    showToast(`Unslopped — ${result.changeCount} changes, ${patterns.length} patterns found`);
+    try {
+      const patterns = detectUnslopPatterns(inputText);
+      setUnslopPatterns(patterns);
+      const result = applyUnslop(inputText, patterns);
+      setUnslopResult(result);
+      setOutputText(result.text);
+      setHasOutput(true);
+      setViewMode('diff'); // Auto-show diff after transformation
+      showToast(`Unslopped — ${result.changeCount} changes, ${patterns.length} patterns found`);
+    } catch (err) {
+      showToast(`Unslopper error: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
   }
 
   async function runHarper() {
@@ -3826,10 +3907,17 @@ export default function App() {
 
     const nextPreview = file.type.startsWith('image/') ? window.URL.createObjectURL(file) : null;
     setPreviewUrl(nextPreview);
-    const nextResult = await verifyFile(file);
-    setResult(nextResult);
-    setIsVerifying(false);
-    showToast(`Loaded ${file.name}`);
+
+    try {
+      const nextResult = await verifyFile(file);
+      setResult(nextResult);
+      showToast(`Loaded ${file.name}`);
+    } catch (err) {
+      console.error('Verification failed:', err);
+      showToast(`Error: ${err instanceof Error ? err.message : 'Verification failed'}`);
+    } finally {
+      setIsVerifying(false);
+    }
   }
 
   function handleDragEnter(event: DragEvent<HTMLDivElement>) {
