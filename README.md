@@ -103,6 +103,7 @@ A trusted C2PA result means the SDK validated the manifest signature, content bi
 - [C2PA JavaScript SDK](https://github.com/contentauth/c2pa-js)
 - [Supported C2PA media formats](https://opensource.contentauthenticity.org/docs/c2patool/docs/supported-formats)
 - [SynthID overview](https://deepmind.google/technologies/synthid)
+- [Harper - Grammar checker](https://github.com/Automattic/harper)
 
 ## License
 
