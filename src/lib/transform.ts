@@ -1248,7 +1248,18 @@ export function detectUnslopPatterns(text: string): UnslopPattern[] {
     }
   }
 
-  return patterns;
+  // Deduplicate overlapping patterns: prefer longer phrases over shorter substrings
+  // e.g. "let's dive in" should override "dive in"
+  patterns.sort((a, b) => b.phrase.length - a.phrase.length);
+  const kept: UnslopPattern[] = [];
+  for (const pat of patterns) {
+    const isSubstring = kept.some(k => k.phrase.includes(pat.phrase) || pat.phrase.includes(k.phrase));
+    if (!isSubstring) {
+      kept.push(pat);
+    }
+  }
+
+  return kept;
 }
 
 export function applyUnslop(text: string, patterns?: UnslopPattern[]): UnslopResult {
@@ -1264,7 +1275,13 @@ export function applyUnslop(text: string, patterns?: UnslopPattern[]): UnslopRes
         const before = result;
         result = result.replace(/^[-=_]{3,}\s*$/gm, '');
         if (result !== before) changeCount++;
+        continue;
       }
+      // Remove throat-clearing phrases, AI patterns, chatbot filler
+      const regex = new RegExp(`\\b${escapeRegex(pat.phrase)}\\b\\s*`, 'gi');
+      const before = result;
+      result = result.replace(regex, '');
+      if (result !== before) changeCount++;
       continue;
     }
 
@@ -1299,15 +1316,26 @@ export function applyUnslop(text: string, patterns?: UnslopPattern[]): UnslopRes
 
   // Clean up double spaces from removed phrases
   result = result.replace(/ {2,}/g, ' ');
-  // Clean up leading punctuation artifacts (", the" → "the") and orphaned commas
-  result = result.replace(/^\s*[,.]\s*/gm, '');
+  // Clean up orphaned "that" / articles after removed phrases ("saying that artificial" → "saying artificial")
+  result = result.replace(/(?:saying|said|means|means that|implies that|indicates that)\s+that\b/gi, 'saying');
+  result = result.replace(/([.!?,;:])\s+(?:that|the|a|an|and|or|but|so|yet)\s+/gi, '$1 ');
+  // Clean up orphaned leading articles/conjunctions at line start
+  result = result.replace(/^\s*(?:that|the|a|an|and|or|but|so|yet|in|it|is|was|are|were|has|have|had)\s+/gm, '');
+  // Clean up leading punctuation artifacts
+  result = result.replace(/^\s*[,.:;]\s*/gm, '');
+  // Clean up orphaned commas/periods between words
+  result = result.replace(/([a-zA-Z])\.\s*,\s*/g, '$1. ');
+  result = result.replace(/,\s*\./g, '.');
+  result = result.replace(/\.\s*\./g, '.');
   result = result.replace(/\s+([.,;:!?])/g, '$1');
   // Clean up empty lines left by removals
   result = result.replace(/\n{3,}/g, '\n\n');
   // Clean up sentence starting with lowercase after removal
   result = result.replace(/([.!?]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
-  // Clean up orphaned "and" / "or" at start of sentence
-  result = result.replace(/^\s*(?:and|or|but|so|yet)\s+/gm, '');
+  // Clean up orphaned "and" / "or" / "but" at start of sentence
+  result = result.replace(/^\s*(?:and|or|but|so|yet|,)\s+/gm, '');
+  // Clean up leading comma at start of sentence
+  result = result.replace(/^(\s*[,])\s*/gm, '');
   // Clean up double spaces again after all cleanups
   result = result.replace(/ {2,}/g, ' ');
 
