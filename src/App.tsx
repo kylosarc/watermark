@@ -63,6 +63,7 @@ import {
 } from './lib/transform';
 import { harperLint, harperFixAll } from './lib/harper';
 import type { HarperLint } from './lib/harper';
+import { analyzeWithNlp, POS_LABELS } from './lib/winkNlp';
 import type { ManifestSummary, ValidationCode, VerificationResult, VerificationStatus, ValidationState } from './lib/types';
 import {
   storeResult, getStoredResult,
@@ -2117,6 +2118,18 @@ interface TextAnalysis {
   topWords: [string, number][];
   aiConfidence: number; // 0-100, estimated AI likelihood
   aiSignals: string[];
+  // wink-nlp fields
+  nlpSentiment: number; // -1 to 1
+  nlpSentenceCount: number;
+  nlpTokenCount: number;
+  posDistribution: Record<string, number>;
+  entities: { text: string; type: string }[];
+  sentenceSentiments: number[];
+  adjectiveDensity: number; // ADJ / total tokens
+  nounDensity: number; // NOUN + PROPN / total tokens
+  passiveEstimate: number; // estimated passive voice ratio
+  pronounRatio: number; // PRON / total tokens
+  entityDensity: number; // entities per sentence
 }
 
 function analyzeText(text: string): TextAnalysis {
@@ -2338,6 +2351,28 @@ function analyzeText(text: string): TextAnalysis {
 
   const aiConfidence = Math.min(100, aiScore);
 
+  // wink-nlp analysis
+  const nlp = analyzeWithNlp(text);
+  const nlpSentiment = nlp?.sentiment ?? 0;
+  const nlpSentenceCount = nlp?.sentenceCount ?? sentenceCount;
+  const nlpTokenCount = nlp?.tokenCount ?? wordCount;
+  const posDistribution = nlp?.posDistribution ?? {};
+  const entities = nlp?.entities ?? [];
+  const sentenceSentiments = nlp?.sentenceSentiments ?? [];
+
+  // Derived metrics from POS
+  const totalTokens = nlpTokenCount || 1;
+  const adjCount = (posDistribution['ADJ'] ?? 0);
+  const nounCount = (posDistribution['NOUN'] ?? 0) + (posDistribution['PROPN'] ?? 0);
+  const auxCount = posDistribution['AUX'] ?? 0;
+  const verbCount = posDistribution['VERB'] ?? 0;
+  const pronCount = posDistribution['PRON'] ?? 0;
+  const adjectiveDensity = adjCount / totalTokens;
+  const nounDensity = nounCount / totalTokens;
+  const passiveEstimate = (auxCount + verbCount) > 0 ? auxCount / (auxCount + verbCount) : 0;
+  const pronounRatio = pronCount / totalTokens;
+  const entityDensity = nlpSentenceCount > 0 ? entities.length / nlpSentenceCount : 0;
+
   return {
     charCount,
     wordCount,
@@ -2358,6 +2393,17 @@ function analyzeText(text: string): TextAnalysis {
     topWords,
     aiConfidence,
     aiSignals,
+    nlpSentiment,
+    nlpSentenceCount,
+    nlpTokenCount,
+    posDistribution,
+    entities,
+    sentenceSentiments,
+    adjectiveDensity: Math.round(adjectiveDensity * 1000) / 10,
+    nounDensity: Math.round(nounDensity * 1000) / 10,
+    passiveEstimate: Math.round(passiveEstimate * 100),
+    pronounRatio: Math.round(pronounRatio * 1000) / 10,
+    entityDensity: Math.round(entityDensity * 100) / 100,
   };
 }
 
@@ -2411,7 +2457,7 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
   }, [textSimResults]);
 
   // Sub-tab for detail panel
-  type TextSubTab = 'analysis' | 'transform';
+  type TextSubTab = 'analysis' | 'nlp' | 'transform';
   const [subTab, setSubTab] = useState<TextSubTab>('analysis');
 
   // Persistence: save text items when they change
@@ -2792,6 +2838,14 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
                             <Info size={13} /> Analysis
                           </button>
                           <button
+                            className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'nlp' ? 'active' : ''}`}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('nlp'); }}
+                            title="NLP analysis: sentiment, POS distribution, named entities, writing style"
+                          >
+                            <BookOpen size={13} /> NLP
+                          </button>
+                          <button
                             className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'transform' ? 'active' : ''}`}
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('transform'); }}
@@ -2827,6 +2881,8 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
                   textSimRunning={textSimRunning}
                   runTextSimulations={runTextSimulations}
                 />
+              ) : subTab === 'nlp' ? (
+                <NlpDetailPanel item={selectedItem} />
               ) : (
                 <TextTransformPanel inputText={selectedItem.content} format={selectedItem.format} showToast={showToast} />
               )}
@@ -2896,6 +2952,17 @@ function TextDetailPanel({
         topWords: [] as [string, number][],
         aiConfidence: 0,
         aiSignals: [] as string[],
+        nlpSentiment: 0,
+        nlpSentenceCount: 0,
+        nlpTokenCount: 0,
+        posDistribution: {} as Record<string, number>,
+        entities: [] as { text: string; type: string }[],
+        sentenceSentiments: [] as number[],
+        adjectiveDensity: 0,
+        nounDensity: 0,
+        passiveEstimate: 0,
+        pronounRatio: 0,
+        entityDensity: 0,
       };
     }
   })();
@@ -3057,6 +3124,155 @@ function TextDetailPanel({
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── NLP Detail Panel (POS, Entities, Sentiment) ────────────────── */
+
+function NlpDetailPanel({ item }: { item: TextItem }) {
+  const a = item.analysis;
+  if (!a) return <div className="txt-results"><p style={{ color: 'var(--color-muted)' }}>No analysis data available.</p></div>;
+
+  const posEntries = Object.entries(a.posDistribution)
+    .sort(([, a], [, b]) => b - a);
+  const totalTokens = a.nlpTokenCount || 1;
+
+  const sentimentLabel = a.nlpSentiment > 0.2 ? 'Positive' : a.nlpSentiment < -0.2 ? 'Negative' : 'Neutral';
+  const sentimentColor = a.nlpSentiment > 0.2 ? 'var(--color-tertiary)' : a.nlpSentiment < -0.2 ? '#f87171' : 'var(--color-muted)';
+
+  const entityTypeCounts: Record<string, number> = {};
+  for (const e of a.entities) {
+    entityTypeCounts[e.type] = (entityTypeCounts[e.type] ?? 0) + 1;
+  }
+
+  return (
+    <div className="txt-results">
+      <h3 style={{ marginBottom: '0.75rem' }}>NLP Analysis</h3>
+
+      {/* Sentiment */}
+      <div className="txt-section">
+        <div className="txt-section-title">Sentiment</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <div style={{ flex: 1, height: 8, background: 'var(--color-surface-alt)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${Math.abs(a.nlpSentiment) * 50 + 50}%`,
+              marginLeft: a.nlpSentiment < 0 ? 'auto' : 0,
+              background: sentimentColor,
+              borderRadius: 4,
+              transition: 'width 0.3s',
+            }} />
+          </div>
+          <strong style={{ color: sentimentColor, minWidth: 60, textAlign: 'right' }}>
+            {a.nlpSentiment.toFixed(2)}
+          </strong>
+        </div>
+        <span style={{ color: sentimentColor, fontSize: '0.8rem' }}>{sentimentLabel}</span>
+
+        {a.sentenceSentiments.length > 1 && (
+          <div style={{ marginTop: '0.75rem' }}>
+            <div className="txt-section-title" style={{ fontSize: '0.7rem' }}>Per-sentence sentiment</div>
+            <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: '0.25rem' }}>
+              {a.sentenceSentiments.map((s, i) => (
+                <div
+                  key={i}
+                  title={`Sentence ${i + 1}: ${s.toFixed(2)}`}
+                  style={{
+                    width: 16,
+                    height: 16,
+                    borderRadius: 3,
+                    background: s > 0.2 ? 'var(--color-tertiary)' : s < -0.2 ? '#f87171' : 'var(--color-surface-alt)',
+                    opacity: 0.5 + Math.abs(s) * 0.5,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Entities */}
+      <div className="txt-section">
+        <div className="txt-section-title">
+          Named Entities
+          <span style={{ marginLeft: '0.5rem', fontWeight: 400, color: 'var(--color-muted)', fontSize: '0.75rem' }}>
+            {a.entities.length} found · {a.entityDensity.toFixed(1)} per sentence
+          </span>
+        </div>
+        {a.entities.length === 0 ? (
+          <p style={{ color: 'var(--color-muted)', fontSize: '0.8rem' }}>No named entities detected.</p>
+        ) : (
+          <>
+            {Object.keys(entityTypeCounts).length > 0 && (
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                {Object.entries(entityTypeCounts).map(([type, count]) => (
+                  <span key={type} className="txt-batch-item-badge" style={{ fontSize: '0.7rem' }}>
+                    {type}: {count}
+                  </span>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              {a.entities.map((e, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                  <span style={{ color: 'var(--color-text)' }}>{e.text}</span>
+                  <span className="txt-batch-item-badge" style={{ fontSize: '0.65rem' }}>{e.type}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* POS Distribution */}
+      <div className="txt-section">
+        <div className="txt-section-title">
+          Part-of-Speech Distribution
+          <span style={{ marginLeft: '0.5rem', fontWeight: 400, color: 'var(--color-muted)', fontSize: '0.75rem' }}>
+            {a.nlpTokenCount} tokens
+          </span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          {posEntries.map(([pos, count]) => {
+            const pct = (count / totalTokens) * 100;
+            const label = POS_LABELS[pos] ?? pos;
+            return (
+              <div key={pos} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
+                <span style={{ minWidth: 90, color: 'var(--color-muted)' }}>{label}</span>
+                <div style={{ flex: 1, height: 6, background: 'var(--color-surface-alt)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: 'var(--color-primary)', borderRadius: 3 }} />
+                </div>
+                <span style={{ minWidth: 36, textAlign: 'right', color: 'var(--color-text)' }}>{count}</span>
+                <span style={{ minWidth: 40, textAlign: 'right', color: 'var(--color-muted)', fontSize: '0.7rem' }}>{pct.toFixed(1)}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Writing Style Metrics */}
+      <div className="txt-section">
+        <div className="txt-section-title">Writing Style</div>
+        <div className="txt-stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+          <div className="txt-stat">
+            <span>Adjective Density</span>
+            <strong>{a.adjectiveDensity}%</strong>
+          </div>
+          <div className="txt-stat">
+            <span>Noun Density</span>
+            <strong>{a.nounDensity}%</strong>
+          </div>
+          <div className="txt-stat">
+            <span>Passive Voice Est.</span>
+            <strong>{a.passiveEstimate}%</strong>
+          </div>
+          <div className="txt-stat">
+            <span>Pronoun Ratio</span>
+            <strong>{a.pronounRatio}%</strong>
+          </div>
+        </div>
       </div>
     </div>
   );
