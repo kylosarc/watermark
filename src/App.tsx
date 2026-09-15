@@ -3329,6 +3329,9 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
   // Unsloper state
   const [unslopPatterns, setUnslopPatterns] = useState<UnslopPattern[]>([]);
   const [unslopResult, setUnslopResult] = useState<ReturnType<typeof applyUnslop> | null>(null);
+  const [skipFillerRemoval, setSkipFillerRemoval] = useState(() => {
+    try { return localStorage.getItem('wm:skipFillerRemoval') === 'true'; } catch { return false; }
+  });
 
   // Harper state
   const [harperLints, setHarperLints] = useState<HarperLint[]>([]);
@@ -3350,7 +3353,10 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
 
   function runUnsloper() {
     try {
-      const patterns = detectUnslopPatterns(inputText);
+      const allPatterns = detectUnslopPatterns(inputText);
+      const patterns = skipFillerRemoval
+        ? allPatterns.filter(p => p.category !== 'transition')
+        : allPatterns;
       setUnslopPatterns(patterns);
       const result = applyUnslop(inputText, patterns);
       setUnslopResult(result);
@@ -3516,6 +3522,14 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
           <div className="xform-unslop-intro">
             <p>Cleans up verbose language, AI-typical phrases, inflated synonyms, passive constructions, chatbot filler, and formatting tells — all in one pass. Replaces with direct, natural alternatives.</p>
           </div>
+
+          <label className="xform-check">
+            <input type="checkbox" checked={skipFillerRemoval} onChange={(e) => {
+              setSkipFillerRemoval(e.target.checked);
+              try { localStorage.setItem('wm:skipFillerRemoval', String(e.target.checked)); } catch {}
+            }} />
+            <span>Keep transition words (furthermore, moreover, in addition…)</span>
+          </label>
 
           <button className="action-tactile button-primary xform-run" type="button" onClick={runUnsloper} disabled={!inputText}>
             <Sparkles size={15} /> Improve Text

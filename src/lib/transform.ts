@@ -1314,30 +1314,25 @@ export function applyUnslop(text: string, patterns?: UnslopPattern[]): UnslopRes
     if (result !== before) changeCount++;
   }
 
-  // Clean up double spaces from removed phrases
-  result = result.replace(/ {2,}/g, ' ');
-  // Clean up orphaned "that" / articles after removed phrases ("saying that artificial" → "saying artificial")
-  result = result.replace(/(?:saying|said|means|means that|implies that|indicates that)\s+that\b/gi, 'saying');
-  result = result.replace(/([.!?,;:])\s+(?:that|the|a|an|and|or|but|so|yet)\s+/gi, '$1 ');
-  // Clean up orphaned leading articles/conjunctions at line start
-  result = result.replace(/^\s*(?:that|the|a|an|and|or|but|so|yet|in|it|is|was|are|were|has|have|had)\s+/gm, '');
-  // Clean up leading punctuation artifacts
-  result = result.replace(/^\s*[,.:;]\s*/gm, '');
-  // Clean up orphaned commas/periods between words
-  result = result.replace(/([a-zA-Z])\.\s*,\s*/g, '$1. ');
-  result = result.replace(/,\s*\./g, '.');
-  result = result.replace(/\.\s*\./g, '.');
-  result = result.replace(/\s+([.,;:!?])/g, '$1');
-  // Clean up empty lines left by removals
-  result = result.replace(/\n{3,}/g, '\n\n');
-  // Clean up sentence starting with lowercase after removal
-  result = result.replace(/([.!?]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
-  // Clean up orphaned "and" / "or" / "but" at start of sentence
-  result = result.replace(/^\s*(?:and|or|but|so|yet|,)\s+/gm, '');
-  // Clean up leading comma at start of sentence
-  result = result.replace(/^(\s*[,])\s*/gm, '');
-  // Clean up double spaces again after all cleanups
-  result = result.replace(/ {2,}/g, ' ');
+  // Only run cleanup if actual changes were made (prevents corrupting unchanged text)
+  if (changeCount > 0) {
+    // Clean up double spaces from removed phrases
+    result = result.replace(/ {2,}/g, ' ');
+    // Clean up orphaned conjunctions at line start (only after removals)
+    result = result.replace(/^\s*(?:and|or|but|so|yet)\s+/gm, '');
+    // Clean up leading punctuation artifacts
+    result = result.replace(/^\s*[,.:;]\s*/gm, '');
+    // Clean up orphaned commas/periods
+    result = result.replace(/,\s*\./g, '.');
+    result = result.replace(/\.\s*\./g, '.');
+    result = result.replace(/\s+([.,;:!?])/g, '$1');
+    // Clean up empty lines left by removals
+    result = result.replace(/\n{3,}/g, '\n\n');
+    // Clean up sentence starting with lowercase after removal
+    result = result.replace(/([.!?]\s+)([a-z])/g, (_, p1, p2) => p1 + p2.toUpperCase());
+    // Clean up double spaces again
+    result = result.replace(/ {2,}/g, ' ');
+  }
 
   return {
     text: result.trim(),
@@ -1349,7 +1344,7 @@ export function applyUnslop(text: string, patterns?: UnslopPattern[]): UnslopRes
 }
 
 function categorizePhrase(phrase: string): string {
-  if (['furthermore', 'moreover', 'additionally', 'consequently', 'nevertheless', 'nonetheless', 'accordingly', 'subsequently', 'indeed', 'in essence', 'that said'].includes(phrase)) return 'transition';
+  if (['furthermore', 'moreover', 'in addition', 'additionally', 'consequently', 'nevertheless', 'nonetheless', 'accordingly', 'subsequently', 'indeed', 'in essence', 'that said'].includes(phrase)) return 'transition';
   if (['leverage', 'utilize', 'boasts', 'bolstered', 'delve', 'showcase', 'tapestry', 'robust', 'pivotal', 'landscape', 'intricate', 'unveil', 'unleash', 'harness', 'elevate', 'illuminate', 'transcend', 'captivate', 'seamless', 'innovative', 'comprehensive', 'multifaceted', 'nuanced', 'profound', 'dynamic', 'bespoke', 'curated', 'ecosystem', 'paradigm', 'cornerstone', 'hallmark', 'streamline', 'utilize', 'poised to'].includes(phrase)) return 'verbose synonym';
   if (['game changer', 'game-changer', 'game-changing', 'holistic approach', 'synergy', 'paradigm shift', 'cutting edge', 'cutting-edge', 'state of the art', 'revolutionize the way', 'constantly evolving'].includes(phrase)) return 'buzzword';
   if (['serves as a testament', 'serves as a reminder', 'stands as a testament', 'stands as a reminder', 'plays a crucial role', 'plays a pivotal role', 'plays a vital role', 'plays a significant role', 'plays a key role', 'underscores its importance', 'underscores its significance', 'setting the stage for', 'a testament to', 'at the forefront of'].includes(phrase)) return 'inflated importance';
