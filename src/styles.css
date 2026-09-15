@@ -4761,3 +4761,17 @@ pre {
     gap: 12px;
   }
 }
+
+/* ── Tool-attributed text highlighting ─────────────────────── */
+.diff-pane-content .diff-line-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Legend swatches in output header */
+.xform-output-header span[style*="border-radius: 2px"][style*="display: inline-block"] {
+  transition: transform 0.15s;
+}
+.xform-output-header span[style*="border-radius: 2px"][style*="display: inline-block"]:hover {
+  transform: scale(1.3);
+}

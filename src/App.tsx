@@ -3105,12 +3105,212 @@ function diffLines(original: string, transformed: string): DiffLine[] {
   return result;
 }
 
+// ── Word-level diff + tool-attributed highlighting ──────────────
+
+type TransformTool = 'strip' | 'improve' | 'harper';
+
+interface TransformStep {
+  tool: TransformTool;
+  before: string;
+  after: string;
+}
+
+interface HighlightedSegment {
+  text: string;
+  type: 'unchanged' | 'changed';
+  tool?: TransformTool;
+}
+
+// Word-level diff: returns array of {text, type:'same'|'added'|'removed'}
+function wordDiff(a: string, b: string): Array<{ text: string; type: 'same' | 'added' | 'removed' }> {
+  const aWords = a.split(/(\s+)/);
+  const bWords = b.split(/(\s+)/);
+
+  // LCS-based diff
+  const m = aWords.length;
+  const n = bWords.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = aWords[i - 1] === bWords[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+
+  const result: Array<{ text: string; type: 'same' | 'added' | 'removed' }> = [];
+  let i = m, j = n;
+  const raw: Array<{ text: string; type: 'same' | 'added' | 'removed' }> = [];
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && aWords[i - 1] === bWords[j - 1]) {
+      raw.push({ text: aWords[i - 1], type: 'same' });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      raw.push({ text: bWords[j - 1], type: 'added' });
+      j--;
+    } else {
+      raw.push({ text: aWords[i - 1], type: 'removed' });
+      i--;
+    }
+  }
+  raw.reverse();
+
+  // Merge consecutive same-type segments
+  for (const seg of raw) {
+    if (result.length > 0 && result[result.length - 1].type === seg.type) {
+      result[result.length - 1].text += seg.text;
+    } else {
+      result.push({ ...seg });
+    }
+  }
+  return result;
+}
+
+// Compute highlighted segments with tool attribution
+function computeHighlights(original: string, steps: TransformStep[]): {
+  outputSegments: HighlightedSegment[];
+  removedSegments: Array<{ text: string; tool: TransformTool }>;
+} {
+  if (steps.length === 0) {
+    return { outputSegments: [{ text: original, type: 'unchanged' }], removedSegments: [] };
+  }
+
+  // Chain diffs: compute what each tool changed relative to its input
+  const toolDiffs: Array<{ tool: TransformTool; segments: Array<{ text: string; type: 'same' | 'added' | 'removed' }> }> = [];
+  for (const step of steps) {
+    toolDiffs.push({ tool: step.tool, segments: wordDiff(step.before, step.after) });
+  }
+
+  // Build output: start with original text, apply each tool's changes
+  // Track which words came from which tool
+  interface WordInfo { text: string; tool: TransformTool | null; isOriginal: boolean; }
+  let currentWords: WordInfo[] = original.split(/(\s+)/).map(w => ({ text: w, tool: null, isOriginal: true }));
+
+  for (const td of toolDiffs) {
+    // Reconstruct the "after" text from this tool's diff
+    const afterWords: string[] = [];
+    for (const seg of td.segments) {
+      if (seg.type !== 'removed') afterWords.push(seg.text);
+    }
+    const afterText = afterWords.join('');
+
+    // Now diff current state against this tool's input to find what this tool changed
+    const currentText = currentWords.map(w => w.text).join('');
+    const inputText = td.segments.filter(s => s.type !== 'added').map(s => s.text).join('');
+    const toolWordDiff = wordDiff(inputText, afterText);
+
+    // Map the diff back to currentWords to tag which ones this tool changed
+    // Simple approach: if a word in currentWords differs from input, tag it
+    const inputWords = inputText.split(/(\s+)/);
+    const afterWordArr = afterText.split(/(\s+)/);
+
+    // Build a map of changed positions
+    const changedAfter = new Set<number>();
+    let ai = 0;
+    for (let k = 0; k < toolWordDiff.length; k++) {
+      const seg = toolWordDiff[k];
+      if (seg.type === 'added') {
+        // Find position in afterWords
+        const addedWords = seg.text.split(/(\s+)/);
+        for (const aw of addedWords) {
+          const idx = afterWordArr.indexOf(aw);
+          if (idx >= 0) changedAfter.add(idx);
+        }
+      }
+    }
+
+    // Replace currentWords with afterWords, tagging changed ones
+    const newWords: WordInfo[] = afterWordArr.map((w, idx) => ({
+      text: w,
+      tool: changedAfter.has(idx) ? td.tool : null,
+      isOriginal: false,
+    }));
+    currentWords = newWords;
+  }
+
+  // Build output segments
+  const outputSegments: HighlightedSegment[] = currentWords.map(w => ({
+    text: w.text,
+    type: w.tool ? 'changed' : 'unchanged',
+    tool: w.tool ?? undefined,
+  }));
+
+  // Merge consecutive same-tool segments
+  const merged: HighlightedSegment[] = [];
+  for (const seg of outputSegments) {
+    if (merged.length > 0 && merged[merged.length - 1].type === seg.type && merged[merged.length - 1].tool === seg.tool) {
+      merged[merged.length - 1].text += seg.text;
+    } else {
+      merged.push({ ...seg });
+    }
+  }
+
+  // Collect removed segments for original pane
+  const removedSegments: Array<{ text: string; tool: TransformTool }> = [];
+  for (const td of toolDiffs) {
+    for (const seg of td.segments) {
+      if (seg.type === 'removed' && seg.text.trim()) {
+        removedSegments.push({ text: seg.text, tool: td.tool });
+      }
+    }
+  }
+
+  return { outputSegments: merged, removedSegments };
+}
+
+// Render the original text with removed portions highlighted
+function renderOriginalWithHighlights(original: string, removedSegments: Array<{ text: string; tool: TransformTool }>): React.ReactNode[] {
+  if (removedSegments.length === 0) return [<span key="full">{original}</span>];
+
+  const parts: React.ReactNode[] = [];
+  let remaining = original;
+
+  for (const rem of removedSegments) {
+    const idx = remaining.indexOf(rem.text);
+    if (idx >= 0) {
+      if (idx > 0) parts.push(<span key={`keep-${parts.length}`}>{remaining.slice(0, idx)}</span>);
+      parts.push(
+        <span
+          key={`rem-${parts.length}`}
+          style={{
+            background: `${toolColors[rem.tool]}22`,
+            color: toolColors[rem.tool],
+            textDecoration: 'line-through',
+            textDecorationColor: toolColors[rem.tool],
+            borderRadius: 2,
+            padding: '0 1px',
+          }}
+        >
+          {rem.text}
+        </span>
+      );
+      remaining = remaining.slice(idx + rem.text.length);
+    }
+  }
+  if (remaining) parts.push(<span key="rest">{remaining}</span>);
+  return parts;
+}
+
+const toolColors: Record<TransformTool, string> = {
+  strip: '#f472b6',    // pink
+  improve: '#4ade80',   // green
+  harper: '#a78bfa',    // purple
+};
+
+const toolLabels: Record<TransformTool, string> = {
+  strip: 'Strip / Obfuscate',
+  improve: 'Improve Text',
+  harper: 'Grammar',
+};
+
 function TextTransformPanel({ inputText, format, showToast }: { inputText: string; format?: string; showToast: (msg: string) => void }) {
   const [mode, setMode] = useState<'strip' | 'improve' | 'harper'>('strip');
   const [viewMode, setViewMode] = useState<'output' | 'diff'>('output');
   const [outputText, setOutputText] = useState('');
   const [hasOutput, setHasOutput] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Transformation history for multi-tool highlighting
+  const [transformSteps, setTransformSteps] = useState<TransformStep[]>([]);
+  const [originalText, setOriginalText] = useState('');
 
   // Check if Harper should be available (not for PDFs by default)
   const harperAvailable = format !== 'pdf';
@@ -3139,7 +3339,9 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
       const result = applyStripper(inputText, stripOpts);
       setOutputText(result);
       setHasOutput(true);
-      setViewMode('diff'); // Auto-show diff after transformation
+      setViewMode('diff');
+      setOriginalText(inputText);
+      setTransformSteps([{ tool: 'strip', before: inputText, after: result }]);
       showToast('Text stripped');
     } catch (err) {
       showToast(`Strip error: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -3154,7 +3356,9 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
       setUnslopResult(result);
       setOutputText(result.text);
       setHasOutput(true);
-      setViewMode('diff'); // Auto-show diff after transformation
+      setViewMode('diff');
+      setOriginalText(inputText);
+      setTransformSteps([{ tool: 'improve', before: inputText, after: result.text }]);
       showToast(`Unslopped — ${result.changeCount} changes, ${patterns.length} patterns found`);
     } catch (err) {
       showToast(`Unslopper error: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -3164,14 +3368,15 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
   async function runHarper() {
     setHarperRunning(true);
     try {
-      // Normalize PDF text to remove letter-spacing artifacts
       const textToCheck = format === 'pdf' ? normalizePdfText(inputText) : inputText;
       const lints = await harperLint(textToCheck);
       setHarperLints(lints);
       const fixed = await harperFixAll(textToCheck);
       setOutputText(fixed);
       setHasOutput(true);
-      setViewMode('diff'); // Auto-show diff after transformation
+      setViewMode('diff');
+      setOriginalText(inputText);
+      setTransformSteps([{ tool: 'harper', before: inputText, after: fixed }]);
       showToast(`Harper: ${lints.length} issues found and fixed`);
     } catch (err) {
       showToast(`Harper error: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -3429,6 +3634,19 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
                 <Diff size={13} /> Side-by-Side
               </button>
             </div>
+
+            {/* Tool color legend */}
+            {transformSteps.length > 0 && (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 11, color: 'var(--color-on-surface-variant)' }}>
+                {transformSteps.map((step) => (
+                  <span key={step.tool} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: toolColors[step.tool], display: 'inline-block' }} />
+                    {toolLabels[step.tool]}
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="xform-output-actions">
               <button className="action-tactile button-ghost" type="button" onClick={copyOutput}>
                 <Clipboard size={14} /> {copied ? 'Copied' : 'Copy'}
@@ -3440,37 +3658,91 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
           </div>
 
           {viewMode === 'diff' ? (
-            <div className="side-by-side-diff">
-              <div className="diff-pane">
-                <div className="diff-pane-header">
-                  <span>Original</span>
-                  <span className="diff-pane-stats">{inputText.length.toLocaleString()} chars</span>
-                </div>
-                <div className="diff-pane-content">
-                  {diffLines(inputText, outputText).map((line, i) => (
-                    <div key={`orig-${i}`} className={`diff-line ${line.type === 'removed' ? 'removed' : line.type === 'unchanged' ? '' : 'dim'}`}>
-                      <span className="diff-line-num">{line.type === 'removed' || line.type === 'unchanged' ? line.origNum : ''}</span>
-                      <span className="diff-line-text">{line.text}</span>
+            transformSteps.length > 0 ? (
+              (() => {
+                const { outputSegments, removedSegments } = computeHighlights(originalText, transformSteps);
+                return (
+                  <div className="side-by-side-diff">
+                    <div className="diff-pane">
+                      <div className="diff-pane-header">
+                        <span>Original</span>
+                        <span className="diff-pane-stats">{originalText.length.toLocaleString()} chars</span>
+                      </div>
+                      <div className="diff-pane-content">
+                        <div className="diff-line">
+                          <span className="diff-line-text" style={{ lineHeight: 1.7 }}>
+                            {renderOriginalWithHighlights(originalText, removedSegments)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  ))}
+                    <div className="diff-divider" />
+                    <div className="diff-pane">
+                      <div className="diff-pane-header">
+                        <span>Transformed</span>
+                        <span className="diff-pane-stats">{outputText.length.toLocaleString()} chars</span>
+                      </div>
+                      <div className="diff-pane-content">
+                        <div className="diff-line">
+                          <span className="diff-line-text" style={{ lineHeight: 1.7 }}>
+                            {outputSegments.map((seg, i) => (
+                              seg.type === 'changed' && seg.tool ? (
+                                <span
+                                  key={i}
+                                  style={{
+                                    background: `${toolColors[seg.tool]}22`,
+                                    color: toolColors[seg.tool],
+                                    fontWeight: 600,
+                                    borderRadius: 2,
+                                    padding: '0 1px',
+                                  }}
+                                >
+                                  {seg.text}
+                                </span>
+                              ) : (
+                                <span key={i}>{seg.text}</span>
+                              )
+                            ))}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="side-by-side-diff">
+                <div className="diff-pane">
+                  <div className="diff-pane-header">
+                    <span>Original</span>
+                    <span className="diff-pane-stats">{inputText.length.toLocaleString()} chars</span>
+                  </div>
+                  <div className="diff-pane-content">
+                    {diffLines(inputText, outputText).map((line, i) => (
+                      <div key={`orig-${i}`} className={`diff-line ${line.type === 'removed' ? 'removed' : line.type === 'unchanged' ? '' : 'dim'}`}>
+                        <span className="diff-line-num">{line.type === 'removed' || line.type === 'unchanged' ? line.origNum : ''}</span>
+                        <span className="diff-line-text">{line.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="diff-divider" />
+                <div className="diff-pane">
+                  <div className="diff-pane-header">
+                    <span>Transformed</span>
+                    <span className="diff-pane-stats">{outputText.length.toLocaleString()} chars</span>
+                  </div>
+                  <div className="diff-pane-content">
+                    {diffLines(inputText, outputText).map((line, i) => (
+                      <div key={`out-${i}`} className={`diff-line ${line.type === 'added' ? 'added' : line.type === 'unchanged' ? '' : 'dim'}`}>
+                        <span className="diff-line-num">{line.type === 'added' || line.type === 'unchanged' ? line.outNum : ''}</span>
+                        <span className="diff-line-text">{line.type === 'removed' ? '' : (line.outText ?? line.text)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div className="diff-divider" />
-              <div className="diff-pane">
-                <div className="diff-pane-header">
-                  <span>Transformed</span>
-                  <span className="diff-pane-stats">{outputText.length.toLocaleString()} chars</span>
-                </div>
-                <div className="diff-pane-content">
-                  {diffLines(inputText, outputText).map((line, i) => (
-                    <div key={`out-${i}`} className={`diff-line ${line.type === 'added' ? 'added' : line.type === 'unchanged' ? '' : 'dim'}`}>
-                      <span className="diff-line-num">{line.type === 'added' || line.type === 'unchanged' ? line.outNum : ''}</span>
-                      <span className="diff-line-text">{line.type === 'removed' ? '' : (line.outText ?? line.text)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            )
           ) : (
             <textarea className="xform-output-text" readOnly value={outputText} rows={12} />
           )}
