@@ -2351,28 +2351,6 @@ function analyzeText(text: string): TextAnalysis {
 
   const aiConfidence = Math.min(100, aiScore);
 
-  // wink-nlp analysis
-  const nlp = analyzeWithNlp(text);
-  const nlpSentiment = nlp?.sentiment ?? 0;
-  const nlpSentenceCount = nlp?.sentenceCount ?? sentenceCount;
-  const nlpTokenCount = nlp?.tokenCount ?? wordCount;
-  const posDistribution = nlp?.posDistribution ?? {};
-  const entities = nlp?.entities ?? [];
-  const sentenceSentiments = nlp?.sentenceSentiments ?? [];
-
-  // Derived metrics from POS
-  const totalTokens = nlpTokenCount || 1;
-  const adjCount = (posDistribution['ADJ'] ?? 0);
-  const nounCount = (posDistribution['NOUN'] ?? 0) + (posDistribution['PROPN'] ?? 0);
-  const auxCount = posDistribution['AUX'] ?? 0;
-  const verbCount = posDistribution['VERB'] ?? 0;
-  const pronCount = posDistribution['PRON'] ?? 0;
-  const adjectiveDensity = adjCount / totalTokens;
-  const nounDensity = nounCount / totalTokens;
-  const passiveEstimate = (auxCount + verbCount) > 0 ? auxCount / (auxCount + verbCount) : 0;
-  const pronounRatio = pronCount / totalTokens;
-  const entityDensity = nlpSentenceCount > 0 ? entities.length / nlpSentenceCount : 0;
-
   return {
     charCount,
     wordCount,
@@ -2393,17 +2371,45 @@ function analyzeText(text: string): TextAnalysis {
     topWords,
     aiConfidence,
     aiSignals,
-    nlpSentiment,
-    nlpSentenceCount,
-    nlpTokenCount,
-    posDistribution,
-    entities,
-    sentenceSentiments,
-    adjectiveDensity: Math.round(adjectiveDensity * 1000) / 10,
-    nounDensity: Math.round(nounDensity * 1000) / 10,
-    passiveEstimate: Math.round(passiveEstimate * 100),
-    pronounRatio: Math.round(pronounRatio * 1000) / 10,
-    entityDensity: Math.round(entityDensity * 100) / 100,
+    nlpSentiment: 0,
+    nlpSentenceCount: sentenceCount,
+    nlpTokenCount: wordCount,
+    posDistribution: {} as Record<string, number>,
+    entities: [] as { text: string; type: string }[],
+    sentenceSentiments: [] as number[],
+    adjectiveDensity: 0,
+    nounDensity: 0,
+    passiveEstimate: 0,
+    pronounRatio: 0,
+    entityDensity: 0,
+  };
+}
+
+// Async NLP enrichment — call after analyzeText to fill in wink-nlp fields
+async function enrichWithNlp(analysis: TextAnalysis, text: string): Promise<TextAnalysis> {
+  const nlp = await analyzeWithNlp(text);
+  if (!nlp) return analysis;
+
+  const totalTokens = nlp.tokenCount || 1;
+  const adjCount = nlp.posDistribution['ADJ'] ?? 0;
+  const nounCount = (nlp.posDistribution['NOUN'] ?? 0) + (nlp.posDistribution['PROPN'] ?? 0);
+  const auxCount = nlp.posDistribution['AUX'] ?? 0;
+  const verbCount = nlp.posDistribution['VERB'] ?? 0;
+  const pronCount = nlp.posDistribution['PRON'] ?? 0;
+
+  return {
+    ...analysis,
+    nlpSentiment: nlp.sentiment,
+    nlpSentenceCount: nlp.sentenceCount,
+    nlpTokenCount: nlp.tokenCount,
+    posDistribution: nlp.posDistribution,
+    entities: nlp.entities,
+    sentenceSentiments: nlp.sentenceSentiments,
+    adjectiveDensity: Math.round((adjCount / totalTokens) * 1000) / 10,
+    nounDensity: Math.round((nounCount / totalTokens) * 1000) / 10,
+    passiveEstimate: Math.round(((auxCount + verbCount) > 0 ? auxCount / (auxCount + verbCount) : 0) * 100),
+    pronounRatio: Math.round((pronCount / totalTokens) * 1000) / 10,
+    entityDensity: Math.round((nlp.sentenceCount > 0 ? nlp.entities.length / nlp.sentenceCount : 0) * 100) / 100,
   };
 }
 
@@ -2478,16 +2484,14 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
   useEffect(() => {
     const needsAnalysis = items.filter(it => it.status === 'done' && it.analysis === null);
     if (needsAnalysis.length === 0) return;
-    setItems(prev => prev.map(it => {
-      if (it.status === 'done' && it.analysis === null) {
+    (async () => {
+      for (const it of needsAnalysis) {
         try {
-          return { ...it, analysis: analyzeText(it.content) };
-        } catch {
-          return it;
-        }
+          const enriched = await enrichWithNlp(analyzeText(it.content), it.content);
+          setItems(prev => prev.map(p => p.id === it.id ? { ...p, analysis: enriched } : p));
+        } catch { /* skip */ }
       }
-      return it;
-    }));
+    })();
   // Run once on mount only
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -2524,7 +2528,7 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
 
     let analysis: TextAnalysis | null = null;
     try {
-      analysis = analyzeText(text);
+      analysis = await enrichWithNlp(analyzeText(text), text);
     } catch {
       // Analysis failed — return item without analysis
     }

@@ -1,14 +1,21 @@
-import winkNLP, { type ItemSentence, type ItemEntity } from 'wink-nlp';
-import model from 'wink-eng-lite-web-model';
+import type { ItemSentence, ItemEntity, Model, WinkMethods } from 'wink-nlp';
 
 // Lazy singleton — only instantiate once, on first call
-let _nlp: ReturnType<typeof winkNLP> | null = null;
+let _nlp: WinkMethods | null = null;
+let _loadError = false;
 
-function getNlp() {
-  if (!_nlp) {
-    _nlp = winkNLP(model);
+async function getNlp(): Promise<WinkMethods | null> {
+  if (_loadError) return null;
+  if (_nlp) return _nlp;
+  try {
+    const { default: winkNLP } = await import('wink-nlp');
+    const { default: model } = await import('wink-eng-lite-web-model');
+    _nlp = winkNLP(model as Model);
+    return _nlp;
+  } catch {
+    _loadError = true;
+    return null;
   }
-  return _nlp;
 }
 
 export interface NlpAnalysis {
@@ -43,11 +50,13 @@ const POS_LABELS: Record<string, string> = {
 
 export { POS_LABELS };
 
-export function analyzeWithNlp(text: string): NlpAnalysis | null {
+export async function analyzeWithNlp(text: string): Promise<NlpAnalysis | null> {
   if (!text || text.trim().length === 0) return null;
 
+  const nlp = await getNlp();
+  if (!nlp) return null;
+
   try {
-    const nlp = getNlp();
     const its = nlp.its;
     const doc = nlp.readDoc(text);
 
@@ -90,7 +99,6 @@ export function analyzeWithNlp(text: string): NlpAnalysis | null {
       sentenceSentiments,
     };
   } catch {
-    // Model failed to load or process — graceful fallback
     return null;
   }
 }
