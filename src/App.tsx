@@ -283,7 +283,7 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
     warning: 'var(--color-error)',
   };
 
-  const editableKeys = new Set(['Artist', 'Copyright', 'ImageDescription', 'UserComment', 'Software', 'Rating']);
+  // All metadata entries are editable in-memory
 
   function handleEditField(section: string, key: string, value: string) {
     setEditField({ section, key, value });
@@ -453,11 +453,11 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
                         <a href={entry.value} target="_blank" rel="noopener" style={{ color: 'var(--color-primary)' }}>{entry.value}</a>
                       ) : entry.value}
                     </span>
-                    {editMode && editableKeys.has(entry.key) && (
+                    {editMode && (
                       <button
                         className="action-tactile button-ghost"
                         type="button"
-                        style={{ fontSize: 11, padding: '2px 6px' }}
+                        style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(77, 215, 246, 0.1)', border: '1px solid rgba(77, 215, 246, 0.3)', borderRadius: 4, color: 'var(--color-primary)', cursor: 'pointer', whiteSpace: 'nowrap' }}
                         onClick={() => handleEditField(section.label, entry.key, entry.value)}
                       >
                         <Pencil size={11} /> Edit
