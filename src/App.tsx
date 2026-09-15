@@ -2474,6 +2474,24 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
     }
   }, [items]);
 
+  // Re-analyze restored items that have null analysis
+  useEffect(() => {
+    const needsAnalysis = items.filter(it => it.status === 'done' && it.analysis === null);
+    if (needsAnalysis.length === 0) return;
+    setItems(prev => prev.map(it => {
+      if (it.status === 'done' && it.analysis === null) {
+        try {
+          return { ...it, analysis: analyzeText(it.content) };
+        } catch {
+          return it;
+        }
+      }
+      return it;
+    }));
+  // Run once on mount only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const selectedItem = items.find((it) => it.id === selectedId) ?? null;
 
   async function hashText(text: string): Promise<string> {
@@ -3132,7 +3150,9 @@ function TextDetailPanel({
 /* ── NLP Detail Panel (POS, Entities, Sentiment) ────────────────── */
 
 function NlpDetailPanel({ item }: { item: TextItem }) {
-  const a = item.analysis;
+  const a = item.analysis ?? (() => {
+    try { return analyzeText(item.content); } catch { return null; }
+  })();
   if (!a) return <div className="txt-results"><p style={{ color: 'var(--color-muted)' }}>No analysis data available.</p></div>;
 
   const posEntries = Object.entries(a.posDistribution)
