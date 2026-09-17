@@ -63,7 +63,7 @@ import {
 } from './lib/transform';
 import { harperLint, harperFixAll } from './lib/harper';
 import type { HarperLint } from './lib/harper';
-import { analyzeWithNlp, POS_LABELS } from './lib/winkNlp';
+import { analyzeWithNlp, POS_LABELS, getWinkStatus } from './lib/winkNlp';
 import type { ManifestSummary, ValidationCode, VerificationResult, VerificationStatus, ValidationState } from './lib/types';
 import {
   storeResult, getStoredResult,
@@ -2385,9 +2385,9 @@ function analyzeText(text: string): TextAnalysis {
   };
 }
 
-// Async NLP enrichment — call after analyzeText to fill in wink-nlp fields
-async function enrichWithNlp(analysis: TextAnalysis, text: string): Promise<TextAnalysis> {
-  const nlp = await analyzeWithNlp(text);
+// NLP enrichment — call after analyzeText to fill in wink-nlp fields
+function enrichWithNlp(analysis: TextAnalysis, text: string): TextAnalysis {
+  const nlp = analyzeWithNlp(text);
   if (!nlp) return analysis;
 
   const totalTokens = nlp.tokenCount || 1;
@@ -2484,14 +2484,16 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
   useEffect(() => {
     const needsAnalysis = items.filter(it => it.status === 'done' && it.analysis === null);
     if (needsAnalysis.length === 0) return;
-    (async () => {
-      for (const it of needsAnalysis) {
+    setItems(prev => prev.map(it => {
+      if (it.status === 'done' && it.analysis === null) {
         try {
-          const enriched = await enrichWithNlp(analyzeText(it.content), it.content);
-          setItems(prev => prev.map(p => p.id === it.id ? { ...p, analysis: enriched } : p));
-        } catch { /* skip */ }
+          return { ...it, analysis: enrichWithNlp(analyzeText(it.content), it.content) };
+        } catch {
+          return it;
+        }
       }
-    })();
+      return it;
+    }));
   // Run once on mount only
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -2528,7 +2530,7 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
 
     let analysis: TextAnalysis | null = null;
     try {
-      analysis = await enrichWithNlp(analyzeText(text), text);
+      analysis = enrichWithNlp(analyzeText(text), text);
     } catch {
       // Analysis failed — return item without analysis
     }
@@ -3154,10 +3156,17 @@ function TextDetailPanel({
 /* ── NLP Detail Panel (POS, Entities, Sentiment) ────────────────── */
 
 function NlpDetailPanel({ item }: { item: TextItem }) {
-  const a = item.analysis ?? (() => {
+  let a = item.analysis ?? (() => {
     try { return analyzeText(item.content); } catch { return null; }
   })();
+  // Enrich with NLP data if missing
+  if (a && a.posDistribution && Object.keys(a.posDistribution).length === 0) {
+    try { a = enrichWithNlp(a, item.content); } catch { /* use as-is */ }
+  }
   if (!a) return <div className="txt-results"><p style={{ color: 'var(--color-muted)' }}>No analysis data available.</p></div>;
+
+  const winkStatus = getWinkStatus();
+  const hasNlp = a.posDistribution && Object.keys(a.posDistribution).length > 0;
 
   const posEntries = Object.entries(a.posDistribution)
     .sort(([, a], [, b]) => b - a);
@@ -3174,6 +3183,12 @@ function NlpDetailPanel({ item }: { item: TextItem }) {
   return (
     <div className="txt-results">
       <h3 style={{ marginBottom: '0.75rem' }}>NLP Analysis</h3>
+
+      {/* Debug status */}
+      <div style={{ padding: '0.5rem', marginBottom: '0.75rem', borderRadius: 6, background: 'var(--color-surface-alt)', fontSize: '0.75rem', fontFamily: 'monospace' }}>
+        <div>wink-nlp: {winkStatus.initialized ? '✅ initialized' : `❌ not loaded${winkStatus.error ? ` (${winkStatus.error})` : ''}`}</div>
+        <div>POS tags: {hasNlp ? Object.keys(a.posDistribution).length : 'none'} | Entities: {a.entities.length} | Sentiment: {a.nlpSentiment}</div>
+      </div>
 
       {/* Sentiment */}
       <div className="txt-section">

@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/kylosarc/watermark/blob/main/docs/index.html"><img src="https://img.shields.io/badge/Docs-Help%20Guide-4cd7f6?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Docs"/></a>
   <a href="https://github.com/kylosarc/watermark"><img src="https://img.shields.io/badge/GitHub-Source-333?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"/></a>
-  <a href="http://localhost:5173"><img src="https://img.shields.io/badge/Launch-Local%20Dev-4edea3?style=for-the-badge&logo=vite&logoColor=white" alt="Launch Dev"/></a>
+  <a href="http://localhost:42069"><img src="https://img.shields.io/badge/Launch-Local%20Dev-4edea3?style=for-the-badge&logo=vite&logoColor=white" alt="Launch Dev"/></a>
 </p>
 
 <p align="center">
@@ -59,7 +59,7 @@ npm install
 npm run dev
 ```
 
-Vite serves the app at `http://localhost:5173`.
+Vite serves the app at `http://localhost:42069`.
 
 ## Commands
 
