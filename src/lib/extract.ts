@@ -2,6 +2,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import 'pdfjs-dist/build/pdf.worker.mjs';
 import { pptxToJson } from '@fefeding/ppt-parser';
 import mammoth from 'mammoth';
+import jschardet from 'jschardet';
 
 export type FileFormat = 'text' | 'pdf' | 'pptx' | 'docx' | 'unknown';
 
@@ -39,6 +40,7 @@ export interface ExtractedText {
   text: string;
   format: FileFormat;
   pageCount?: number; // pages for PDF, slides for PPTX
+  encoding?: string; // detected encoding for plain text files
 }
 
 export async function extractTextFromFile(file: File): Promise<ExtractedText> {
@@ -59,8 +61,24 @@ export async function extractTextFromFile(file: File): Promise<ExtractedText> {
 }
 
 async function extractPlainText(file: File): Promise<ExtractedText> {
-  const text = await file.text();
-  return { text, format: 'text' };
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  // Detect encoding with jschardet
+  const detected = jschardet.detect(Array.from(bytes));
+  const encoding = detected.encoding || 'UTF-8';
+  const confidence = detected.confidence ?? 0;
+
+  // Decode with detected encoding, fall back to UTF-8
+  try {
+    const decoder = new TextDecoder(encoding, { fatal: confidence > 0.5 });
+    const text = decoder.decode(bytes);
+    return { text, format: 'text', encoding: `${encoding} (${Math.round(confidence * 100)}%)` };
+  } catch {
+    // Fallback to UTF-8
+    const text = new TextDecoder('utf-8').decode(bytes);
+    return { text, format: 'text', encoding: 'UTF-8 (fallback)' };
+  }
 }
 
 async function extractPdfText(file: File): Promise<ExtractedText> {

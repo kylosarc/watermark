@@ -4,6 +4,8 @@
  */
 
 import exifr from 'exifr';
+import piexif from 'piexifjs';
+import { removeMetadata as picscrubRemove, inspectProvenance as picscrubInspect, isFormatSupported, type SupportedFormat } from 'picscrub';
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -477,15 +479,11 @@ export async function writeMetadataToFile(
   file: File,
   metadata: Record<string, unknown>
 ): Promise<Blob> {
-  // For JPEG: use piexifjs-style approach via canvas re-encode
-  // For now, return original file with a note that editing requires
-  // a dedicated library. This is the foundation for future work.
-  //
-  // Future: Use piexifjs for JPEG EXIF write, or exifr + canvas
-  // for a full round-trip. The key challenge is preserving the
-  // exact byte stream while modifying metadata segments.
-
-  // For images, we can at least strip metadata by re-encoding through canvas
+  // For JPEG: use piexifjs for EXIF write
+  if (file.type === 'image/jpeg') {
+    return writeJpegExif(file, metadata);
+  }
+  // For images, re-encode through canvas to strip metadata
   if (file.type.startsWith('image/') && file.type !== 'image/svg+xml') {
     const bitmap = await createImageBitmap(file);
     const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
@@ -493,7 +491,102 @@ export async function writeMetadataToFile(
     ctx.drawImage(bitmap, 0, 0);
     return canvas.convertToBlob({ type: file.type, quality: 0.95 });
   }
-
-  // For non-image files, return original (metadata editing not yet supported)
   return file;
+}
+
+// ── JPEG EXIF strip/write via piexifjs ────────────────────────
+
+/** Strip all EXIF data from a JPEG (lossless — no re-encode) */
+export function stripJpegExif(arrayBuffer: ArrayBuffer): ArrayBuffer {
+  const base64 = arrayBufferToBase64(arrayBuffer);
+  const stripped = piexif.remove(base64);
+  return base64ToArrayBuffer(stripped);
+}
+
+/** Write specific EXIF fields to a JPEG (lossless) */
+export async function writeJpegExif(
+  file: File,
+  fields: Record<string, unknown>
+): Promise<Blob> {
+  const arrayBuffer = await file.arrayBuffer();
+  let base64 = arrayBufferToBase64(arrayBuffer);
+
+  // Load existing EXIF or create new
+  let exifObj: Record<string, unknown>;
+  try {
+    exifObj = piexif.load(base64);
+  } catch {
+    exifObj = { '0th': {}, 'Exif': {}, 'GPS': {}, '1st': {} };
+  }
+
+  // Apply field updates
+  if (typeof fields === 'object' && fields !== null) {
+    for (const [key, value] of Object.entries(fields)) {
+      if (typeof value === 'string') {
+        (exifObj['0th'] as Record<string, unknown>)[key] = value;
+      }
+    }
+  }
+
+  const exifBytes = piexif.dump(exifObj as Record<string, Record<string, unknown>>);
+  base64 = piexif.insert(exifBytes, base64);
+  return new Blob([base64ToArrayBuffer(base64)], { type: 'image/jpeg' });
+}
+
+// ── Lossless metadata scrubbing via picscrub ──────────────────
+
+export interface PicscrubResult {
+  success: boolean;
+  bytesRemoved: number;
+  format: string;
+  error?: string;
+}
+
+/** Losslessly remove all metadata from an image (no re-encode) */
+export async function losslessScrub(buffer: ArrayBuffer, mimeType: string): Promise<PicscrubResult> {
+  try {
+    if (!isFormatSupported(mimeType as SupportedFormat)) {
+      return { success: false, bytesRemoved: 0, format: mimeType, error: 'Format not supported by picscrub' };
+    }
+    const result = await picscrubRemove(new Uint8Array(buffer));
+    return {
+      success: true,
+      bytesRemoved: result.originalSize - result.cleanedSize,
+      format: result.format,
+    };
+  } catch (err) {
+    return { success: false, bytesRemoved: 0, format: mimeType, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
+
+/** Inspect what provenance/metadata exists without removing it */
+export async function inspectProvenance(buffer: ArrayBuffer, mimeType: string) {
+  try {
+    if (!isFormatSupported(mimeType as SupportedFormat)) return null;
+    return await picscrubInspect(new Uint8Array(buffer));
+  } catch {
+    return null;
+  }
+}
+
+// ── Base64 helpers ────────────────────────────────────────────
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return 'data:image/jpeg;base64,' + btoa(binary);
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const dataUrl = base64.startsWith('data:') ? base64 : 'data:image/jpeg;base64,' + base64;
+  const base64Data = dataUrl.split(',')[1];
+  const binary = atob(base64Data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
 }

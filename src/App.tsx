@@ -2386,8 +2386,8 @@ function analyzeText(text: string): TextAnalysis {
 }
 
 // NLP enrichment — call after analyzeText to fill in wink-nlp fields
-function enrichWithNlp(analysis: TextAnalysis, text: string): TextAnalysis {
-  const nlp = analyzeWithNlp(text);
+async function enrichWithNlp(analysis: TextAnalysis, text: string): Promise<TextAnalysis> {
+  const nlp = await analyzeWithNlp(text);
   if (!nlp) return analysis;
 
   const totalTokens = nlp.tokenCount || 1;
@@ -2484,19 +2484,35 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
   useEffect(() => {
     const needsAnalysis = items.filter(it => it.status === 'done' && it.analysis === null);
     if (needsAnalysis.length === 0) return;
-    setItems(prev => prev.map(it => {
-      if (it.status === 'done' && it.analysis === null) {
+    (async () => {
+      for (const it of needsAnalysis) {
         try {
-          return { ...it, analysis: enrichWithNlp(analyzeText(it.content), it.content) };
-        } catch {
-          return it;
-        }
+          const enriched = await enrichWithNlp(analyzeText(it.content), it.content);
+          setItems(prev => prev.map(p => p.id === it.id ? { ...p, analysis: enriched } : p));
+        } catch { /* skip */ }
       }
-      return it;
-    }));
+    })();
   // Run once on mount only
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Arrow key navigation via custom event
+  useEffect(() => {
+    function handleNavigate(e: Event) {
+      const { direction } = (e as CustomEvent).detail;
+      const doneItems = items.filter(it => it.status === 'done');
+      if (doneItems.length === 0) return;
+      const currentIdx = doneItems.findIndex(it => it.id === selectedId);
+      const nextIdx = direction === 'down'
+        ? Math.min(currentIdx + 1, doneItems.length - 1)
+        : Math.max(currentIdx - 1, 0);
+      if (nextIdx >= 0 && nextIdx < doneItems.length) {
+        setSelectedId(doneItems[nextIdx].id);
+      }
+    }
+    window.addEventListener('watermark:text-navigate', handleNavigate);
+    return () => window.removeEventListener('watermark:text-navigate', handleNavigate);
+  }, [items, selectedId]);
 
   const selectedItem = items.find((it) => it.id === selectedId) ?? null;
 
@@ -2530,7 +2546,7 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
 
     let analysis: TextAnalysis | null = null;
     try {
-      analysis = enrichWithNlp(analyzeText(text), text);
+      analysis = await enrichWithNlp(analyzeText(text), text);
     } catch {
       // Analysis failed — return item without analysis
     }
@@ -2674,6 +2690,37 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
     showToast('Report exported');
   }
 
+  function exportTextCSV() {
+    if (items.length === 0) return;
+    const headers = ['Source', 'File Name', 'SHA-256', 'Char Count', 'Word Count', 'Sentence Count', 'Paragraph Count', 'Line Count', 'Avg Word Len', 'Avg Sent Len', 'AI Confidence', 'AI Signals', 'Vocab Richness', 'Repetition Score', 'Burstiness'];
+    const rows = items.filter((it) => it.analysis).map((it) => [
+      it.source,
+      it.fileName ?? 'paste',
+      it.sha256 ?? '',
+      String(it.analysis!.charCount),
+      String(it.analysis!.wordCount),
+      String(it.analysis!.sentenceCount),
+      String(it.analysis!.paragraphCount),
+      String(it.analysis!.lineCount),
+      String(it.analysis!.avgWordLength),
+      String(it.analysis!.avgSentenceLength),
+      String(it.analysis!.aiConfidence),
+      String(it.analysis!.aiSignals),
+      String(it.analysis!.vocabularyRichness),
+      String(it.analysis!.repetitionScore),
+      String(it.analysis!.burstiness),
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `text-analysis-${items.length > 1 ? 'batch' : (items[0]?.fileName ?? 'paste')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exported');
+  }
+
   async function runTextSimulations() {
     const item = selectedItem;
     if (!item?.content) return;
@@ -2747,6 +2794,9 @@ function TextView({ showToast }: { showToast: (msg: string) => void }) {
           <div className="txt-actions">
             <button className="action-tactile button-ghost" type="button" onClick={exportAll} disabled={doneItems.length === 0}>
               <Download size={15} /> Export {doneItems.length > 1 ? `All (${doneItems.length})` : ''}
+            </button>
+            <button className="action-tactile button-ghost" type="button" onClick={exportTextCSV} disabled={doneItems.length === 0}>
+              <Download size={15} /> CSV
             </button>
             <button className="action-tactile button-ghost" type="button" onClick={() => fileInputRef.current?.click()} disabled={isProcessing}>
               <Upload size={15} /> Add Files
@@ -3156,13 +3206,20 @@ function TextDetailPanel({
 /* ── NLP Detail Panel (POS, Entities, Sentiment) ────────────────── */
 
 function NlpDetailPanel({ item }: { item: TextItem }) {
-  let a = item.analysis ?? (() => {
+  const [a, setA] = useState<TextAnalysis | null>(() => item.analysis ?? (() => {
     try { return analyzeText(item.content); } catch { return null; }
-  })();
-  // Enrich with NLP data if missing
-  if (a && a.posDistribution && Object.keys(a.posDistribution).length === 0) {
-    try { a = enrichWithNlp(a, item.content); } catch { /* use as-is */ }
-  }
+  })());
+
+  // Enrich with NLP data if missing (async)
+  useEffect(() => {
+    if (!a || (a.posDistribution && Object.keys(a.posDistribution).length > 0)) return;
+    let cancelled = false;
+    enrichWithNlp(a, item.content).then(enriched => {
+      if (!cancelled) setA(enriched);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [a, item.content]);
+
   if (!a) return <div className="txt-results"><p style={{ color: 'var(--color-muted)' }}>No analysis data available.</p></div>;
 
   const winkStatus = getWinkStatus();
@@ -4196,6 +4253,48 @@ function BatchView({ showToast }: { showToast: (msg: string) => void }) {
     showToast('JSON exported');
   }
 
+  function exportEvidencePack() {
+    if (items.length === 0) return;
+    const pack = items.map((item) => {
+      const r = item.result;
+      const active = r?.manifests.find((m) => m.isActive) ?? r?.manifests[0];
+      return {
+        _schema: 'watermark-evidence-pack/1.0',
+        file: {
+          name: item.fileName,
+          size: item.fileSize,
+          mimeType: item.mimeType,
+          sha256: r?.sha256 ?? null,
+        },
+        verification: {
+          status: r?.status ?? 'pending',
+          validationState: r?.validationState ?? null,
+          manifestCount: r?.manifestCount ?? 0,
+        },
+        manifest: active ? {
+          issuer: active.issuer,
+          claimGenerator: active.claimGenerator,
+          signatureAlgorithm: active.signatureAlgorithm,
+          signedAt: active.signedAt,
+          assertionCount: active.assertions?.length ?? 0,
+          validationCodes: active.validationCodes,
+        } : null,
+        allManifests: r?.manifests.map((m) => ({
+          issuer: m.issuer,
+          claimGenerator: m.claimGenerator,
+          signedAt: m.signedAt,
+          isActive: m.isActive,
+          validationCodes: m.validationCodes,
+        })) ?? [],
+        exportedAt: new Date().toISOString(),
+        tool: 'watermark',
+      };
+    });
+    const json = JSON.stringify(pack.length === 1 ? pack[0] : pack, null, 2);
+    downloadFile(json, `evidence-pack-${items.length > 1 ? 'batch' : (items[0]?.fileName ?? 'unknown')}.json`, 'application/json');
+    showToast('Evidence pack exported');
+  }
+
   function downloadFile(content: string, filename: string, type: string) {
     const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
@@ -4238,6 +4337,9 @@ function BatchView({ showToast }: { showToast: (msg: string) => void }) {
               </button>
               <button className="action-tactile button-secondary" type="button" onClick={exportJSON}>
                 <Download size={15} /> JSON
+              </button>
+              <button className="action-tactile button-secondary" type="button" onClick={exportEvidencePack}>
+                <Download size={15} /> Evidence Pack
               </button>
             </>
           )}
@@ -4417,6 +4519,31 @@ export default function App() {
   useEffect(() => {
     storeLastView(view);
   }, [view]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      // Ctrl/Cmd + Shift + C → copy SHA-256 of selected item
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        const stored = getStoredResult();
+        if (stored?.sha256) {
+          navigator.clipboard.writeText(stored.sha256);
+          showToast('SHA-256 copied');
+        }
+      }
+
+      // Arrow keys → navigate items in text batch (delegated via event)
+      if (!isInput && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        window.dispatchEvent(new CustomEvent('watermark:text-navigate', { detail: { direction: e.key === 'ArrowDown' ? 'down' : 'up' } }));
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showToast]);
 
   // Persistence: restore file info from stored result
   useEffect(() => {
