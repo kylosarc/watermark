@@ -11,8 +11,11 @@ async function getNlp() {
   if (_initAttempted) return null;
   _initAttempted = true;
   try {
-    const { default: winkNLP } = await import('wink-nlp');
-    const { default: model } = await import('wink-eng-lite-web-model');
+    const winkModule = await import('wink-nlp');
+    const modelModule = await import('wink-eng-lite-web-model');
+    // CJS interop: default may be nested or may be the module itself
+    const winkNLP = (winkModule as any).default ?? winkModule;
+    const model = (modelModule as any).default ?? modelModule;
     _nlp = winkNLP(model);
     return _nlp;
   } catch (err) {

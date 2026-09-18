@@ -6,5 +6,8 @@ export default defineConfig({
   server: {
     port: 42069,
     strictPort: false
+  },
+  optimizeDeps: {
+    include: ['wink-nlp', 'wink-eng-lite-web-model']
   }
 });

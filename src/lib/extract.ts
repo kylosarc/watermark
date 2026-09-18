@@ -61,24 +61,24 @@ export async function extractTextFromFile(file: File): Promise<ExtractedText> {
 }
 
 async function extractPlainText(file: File): Promise<ExtractedText> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
+  // Read as text first (simple, always works)
+  const text = await file.text();
 
-  // Detect encoding with jschardet
-  const detected = jschardet.detect(Array.from(bytes));
-  const encoding = detected.encoding || 'UTF-8';
-  const confidence = detected.confidence ?? 0;
-
-  // Decode with detected encoding, fall back to UTF-8
+  // Best-effort encoding detection on first 8KB
+  let encoding = 'UTF-8';
   try {
-    const decoder = new TextDecoder(encoding, { fatal: confidence > 0.5 });
-    const text = decoder.decode(bytes);
-    return { text, format: 'text', encoding: `${encoding} (${Math.round(confidence * 100)}%)` };
-  } catch {
-    // Fallback to UTF-8
-    const text = new TextDecoder('utf-8').decode(bytes);
-    return { text, format: 'text', encoding: 'UTF-8 (fallback)' };
-  }
+    const sample = await file.slice(0, 8192).arrayBuffer();
+    const sampleBytes = new Uint8Array(sample);
+    // jschardet.detect expects a plain object with numeric keys or an array
+    const input: Record<number, number> = {};
+    for (let i = 0; i < sampleBytes.length; i++) input[i] = sampleBytes[i];
+    const detected = (jschardet as any).detect(input);
+    if (detected?.encoding && detected.confidence > 0.6) {
+      encoding = `${detected.encoding} (${Math.round(detected.confidence * 100)}%)`;
+    }
+  } catch { /* encoding detection is optional */ }
+
+  return { text, format: 'text', encoding };
 }
 
 async function extractPdfText(file: File): Promise<ExtractedText> {
