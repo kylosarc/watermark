@@ -14,6 +14,7 @@ import {
   Clipboard,
   Code,
   Copy,
+  Crop,
   Diff,
   Download,
   Eye,
@@ -83,7 +84,7 @@ import './styles.css';
 const ACCEPTED_TYPES = 'image/*,video/mp4,video/quicktime,audio/*';
 const SAMPLE_NAME = 'alpine_dawn_capture_2025.jpg';
 
-type View = 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text' | 'evidence' | 'settings';
+type View = 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text' | 'evidence' | 'settings' | 'edit';
 type InspectorTab = 'overview' | 'assertions' | 'cryptography' | 'metadata' | 'raw-json';
 
 const STATUS_LABELS: Record<VerificationStatus, string> = {
@@ -159,6 +160,7 @@ const STATUS_TONES: Record<VerificationStatus, string> = {
 
 const NAV_ITEMS = [
   { id: 'inspector' as View, label: 'Inspector', icon: ScanSearch },
+  { id: 'edit' as View, label: 'Edit w/ Provenance', icon: Crop },
   { id: 'batch' as View, label: 'Batch Report', icon: List },
   { id: 'diff' as View, label: 'Provenance Diff', icon: Diff },
   { id: 'simulator' as View, label: 'What Would Break?', icon: Zap },
@@ -827,11 +829,13 @@ function EmptyInspector() {
 function FutureView({ view, result }: { view: Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>; result: VerificationResult | null }) {
   const titles: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>, string> = {
     evidence: 'Evidence Export',
-    settings: 'Trust Anchors / Settings'
+    settings: 'Trust Anchors / Settings',
+    edit: 'Edit with Provenance'
   };
   const descriptions: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>, string> = {
     evidence: 'Package verification results, hashes, and validation codes for review.',
-    settings: 'Configure trust policy and local processing preferences.'
+    settings: 'Configure trust policy and local processing preferences.',
+    edit: 'Crop images with full visibility into how the operation affects content binding.'
   };
 
   return (
@@ -1383,6 +1387,234 @@ interface SimResult {
   originalState: string;
   newState: string;
   error?: string;
+}
+
+/* ── Provenance-Aware Image Editor ────────────────────────────── */
+
+function ProvenanceEditor({ result, showToast }: { result: VerificationResult | null; showToast: (msg: string) => void }) {
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [originalHash, setOriginalHash] = useState<string | null>(null);
+  const [outputHash, setOutputHash] = useState<string | null>(null);
+  const [originalState, setOriginalState] = useState<string | null>(null);
+  const [cropRect, setCropRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    setSourceFile(file);
+    setCropRect(null);
+    setOutputHash(null);
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    sha256Hex(file).then(setOriginalHash);
+    setOriginalState(result?.validationState ?? null);
+    e.target.value = '';
+  }
+
+  function handleCanvasMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    setDragStart({ x, y });
+    setIsDragging(true);
+    setCropRect(null);
+  }
+
+  function handleCanvasMouseMove(e: React.MouseEvent<HTMLCanvasElement>) {
+    if (!isDragging || !dragStart) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    setCropRect({
+      x: Math.min(dragStart.x, x),
+      y: Math.min(dragStart.y, y),
+      w: Math.abs(x - dragStart.x),
+      h: Math.abs(y - dragStart.y),
+    });
+  }
+
+  function handleCanvasMouseUp() {
+    setIsDragging(false);
+    setDragStart(null);
+  }
+
+  // Draw image + crop overlay
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img || !img.complete) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    ctx.drawImage(img, 0, 0);
+
+    if (cropRect && cropRect.w > 2 && cropRect.h > 2) {
+      // Dim outside crop
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(0, 0, canvas.width, cropRect.y);
+      ctx.fillRect(0, cropRect.y, cropRect.x, cropRect.h);
+      ctx.fillRect(cropRect.x + cropRect.w, cropRect.y, canvas.width - cropRect.x - cropRect.w, cropRect.h);
+      ctx.fillRect(0, cropRect.y + cropRect.h, canvas.width, canvas.height - cropRect.y - cropRect.h);
+      // Crop border
+      ctx.strokeStyle = 'var(--color-primary)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
+      ctx.setLineDash([]);
+    }
+  }, [previewUrl, cropRect]);
+
+  async function applyCrop() {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img || !cropRect || cropRect.w < 10 || cropRect.h < 10) return;
+
+    // Create cropped canvas
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = cropRect.w;
+    outCanvas.height = cropRect.h;
+    const ctx = outCanvas.getContext('2d')!;
+    ctx.drawImage(img, cropRect.x, cropRect.y, cropRect.w, cropRect.h, 0, 0, cropRect.w, cropRect.h);
+
+    outCanvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const newHash = await sha256Hex(new File([blob], 'cropped.jpg', { type: 'image/jpeg' }));
+      setOutputHash(newHash);
+      showToast('Cropped — binding will be invalidated');
+    }, 'image/jpeg', 0.95);
+  }
+
+  async function applyPrivacyCrop() {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img || !cropRect || cropRect.w < 10 || cropRect.h < 10) return;
+
+    // Apply crop + strip metadata
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = cropRect.w;
+    outCanvas.height = cropRect.h;
+    const ctx = outCanvas.getContext('2d')!;
+    ctx.drawImage(img, cropRect.x, cropRect.y, cropRect.w, cropRect.h, 0, 0, cropRect.w, cropRect.h);
+
+    outCanvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const newHash = await sha256Hex(new File([blob], 'privacy-crop.jpg', { type: 'image/jpeg' }));
+      setOutputHash(newHash);
+      showToast('Privacy crop — credentials stripped + binding invalidated');
+    }, 'image/jpeg', 0.95);
+  }
+
+  return (
+    <main className="app-main">
+      <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
+        <h2 style={{ marginBottom: 8 }}>Edit with Provenance</h2>
+        <p style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 16 }}>
+          Crop images with full visibility into how the operation affects content binding. The original C2PA manifest will be invalidated.
+        </p>
+
+        {/* File drop */}
+        <div
+          style={{ border: '2px dashed var(--color-outline-variant)', borderRadius: 8, padding: 24, textAlign: 'center', marginBottom: 16, cursor: 'pointer' }}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Upload size={24} style={{ color: 'var(--color-muted)', marginBottom: 8 }} />
+          <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>
+            {sourceFile ? sourceFile.name : 'Drop an image or click to select'}
+          </div>
+        </div>
+        <input ref={fileInputRef} className="visually-hidden" type="file" accept="image/*" onChange={handleFileInput} />
+
+        {previewUrl && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 16 }}>
+            {/* Canvas */}
+            <div style={{ position: 'relative', background: 'var(--color-surface)', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(61,73,76,0.3)' }}>
+              <img ref={imgRef} src={previewUrl} alt="Source" style={{ display: 'none' }} onLoad={() => {
+                const canvas = canvasRef.current;
+                const img = imgRef.current;
+                if (canvas && img) {
+                  canvas.width = img.naturalWidth;
+                  canvas.height = img.naturalHeight;
+                  const ctx = canvas.getContext('2d');
+                  if (ctx) ctx.drawImage(img, 0, 0);
+                }
+              }} />
+              <canvas
+                ref={canvasRef}
+                style={{ width: '100%', cursor: 'crosshair', display: 'block' }}
+                onMouseDown={handleCanvasMouseDown}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseUp={handleCanvasMouseUp}
+                onMouseLeave={handleCanvasMouseUp}
+              />
+            </div>
+
+            {/* Controls */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Before/After */}
+              <div style={{ padding: 12, borderRadius: 8, background: 'var(--color-surface)', border: '1px solid rgba(61,73,76,0.3)' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)', marginBottom: 8 }}>Before / After</div>
+                <div style={{ fontSize: 11, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div><span style={{ color: 'var(--color-muted)' }}>Original:</span> <span style={{ color: 'var(--color-on-surface)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>{originalHash?.slice(0, 16)}…</span></div>
+                  <div><span style={{ color: 'var(--color-muted)' }}>State:</span> <span style={{ color: originalState === 'Trusted' ? 'var(--color-tertiary)' : 'var(--color-primary)' }}>{originalState ?? 'Unknown'}</span></div>
+                  {outputHash && (
+                    <>
+                      <div style={{ marginTop: 4 }}><span style={{ color: 'var(--color-muted)' }}>Cropped:</span> <span style={{ color: 'var(--color-on-surface)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>{outputHash.slice(0, 16)}…</span></div>
+                      <div><span style={{ color: 'var(--color-muted)' }}>State:</span> <span style={{ color: '#f87171' }}>Invalid (binding broken)</span></div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Crop info */}
+              {cropRect && (
+                <div style={{ padding: 12, borderRadius: 8, background: 'var(--color-surface)', border: '1px solid rgba(61,73,76,0.3)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)', marginBottom: 4 }}>Crop Region</div>
+                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--color-on-surface)' }}>
+                    {Math.round(cropRect.w)} × {Math.round(cropRect.h)} px
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--color-muted)', marginTop: 4 }}>
+                    Content binding will be invalidated. Original manifest cannot survive this edit.
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <button className="action-tactile button-primary" type="button" onClick={applyCrop} disabled={!cropRect || cropRect.w < 10}>
+                <Crop size={14} /> Apply Crop
+              </button>
+              <button className="action-tactile button-ghost" type="button" onClick={applyPrivacyCrop} disabled={!cropRect || cropRect.w < 10} style={{ borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171' }}>
+                <Eye size={14} /> Privacy Crop (strip credentials)
+              </button>
+              {outputHash && (
+                <button className="action-tactile button-ghost" type="button" onClick={() => {
+                  navigator.clipboard.writeText(outputHash);
+                  showToast('Output hash copied');
+                }}>
+                  <Copy size={14} /> Copy Output Hash
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  );
 }
 
 function SimulatorView({ showToast }: { showToast: (msg: string) => void }) {
@@ -5055,6 +5287,17 @@ export default function App() {
       <div className="app-frame">
         <Header view={view} setView={setView} />
         <DiffView showToast={showToast} />
+        <Footer />
+        <ToastContainer toasts={toasts} />
+      </div>
+    );
+  }
+
+  if (view === 'edit') {
+    return (
+      <div className="app-frame">
+        <Header view={view} setView={setView} />
+        <ProvenanceEditor result={result} showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
       </div>
