@@ -37,6 +37,7 @@ import {
   Play,
   RefreshCw,
   ScanSearch,
+  Search,
   Layers,
   Settings,
   Settings2,
@@ -54,7 +55,7 @@ import { verifyFile } from './lib/c2pa';
 import { errorResult } from './lib/verification';
 import { formatBytes, sha256Hex } from './lib/file';
 import { extractTextFromFile, TEXT_ACCEPT, detectFormat } from './lib/extract';
-import { extractFileMetadata, type FileMetadata, sanitizeMetadata, SANITIZE_PRESETS, applyMetadataEdit } from './lib/metadata';
+import { extractFileMetadata, type FileMetadata, type BinaryInfo, sanitizeMetadata, SANITIZE_PRESETS, applyMetadataEdit } from './lib/metadata';
 import {
   applyStripper, STRIPPER_DEFAULTS, STRIPPER_PRESETS,
   detectUnslopPatterns, applyUnslop,
@@ -246,6 +247,239 @@ function CodeList({ codes }: { codes: ValidationCode[] }) {
   );
 }
 
+/* ── Assertion Search & Policy Check ─────────────────────────── */
+
+const ASSERTION_CATEGORIES: Record<string, string> = {
+  'c2pa.hash': 'binding',
+  'c2pa CLAIM_SIGNATURE': 'signature',
+  'c2pa.relationships': 'provenance',
+  'c2pa.artist': 'provenance',
+  'c2pa.description': 'provenance',
+  'c2pa.rating': 'provenance',
+  'c2pa.location': 'provenance',
+  'c2pa.datetime': 'provenance',
+  'c2pa.softwareAgent': 'provenance',
+  'c2pa.tombof': 'provenance',
+  'c2pa.capture': 'provenance',
+  'c2pa Actions': 'action',
+  'assertion.c2pa.colour_space': 'technical',
+  'assertion.c2pa.thumbnail': 'technical',
+  'assertion.c2pa.video': 'technical',
+  'assertion.c2pa.audio': 'technical',
+};
+
+function categorizeAssertion(label: string): string {
+  for (const [pattern, cat] of Object.entries(ASSERTION_CATEGORIES)) {
+    if (label.includes(pattern)) return cat;
+  }
+  if (label.includes('hash') || label.includes('binding')) return 'binding';
+  if (label.includes('signature') || label.includes('sign')) return 'signature';
+  return 'other';
+}
+
+const CAT_COLORS: Record<string, string> = {
+  binding: 'var(--color-tertiary)',
+  signature: '#f59e0b',
+  provenance: 'var(--color-primary)',
+  technical: 'var(--color-secondary)',
+  other: 'var(--color-muted)',
+};
+
+function AssertionSearch({ assertions }: { assertions: string[] }) {
+  const [query, setQuery] = useState('');
+
+  const filtered = query.trim()
+    ? assertions.filter((a) => a.toLowerCase().includes(query.toLowerCase()))
+    : assertions;
+
+  // Policy summary: count by category
+  const catCounts: Record<string, number> = {};
+  for (const a of assertions) {
+    const cat = categorizeAssertion(a);
+    catCounts[cat] = (catCounts[cat] ?? 0) + 1;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Search input */}
+      <div style={{ position: 'relative' }}>
+        <input
+          type="text"
+          placeholder="Search assertions..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '6px 10px 6px 28px',
+            fontSize: 12,
+            fontFamily: 'var(--font-mono)',
+            background: 'var(--color-surface)',
+            color: 'var(--color-on-surface)',
+            border: '1px solid var(--color-outline-variant)',
+            borderRadius: 6,
+            outline: 'none',
+          }}
+        />
+        <Search size={14} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)' }} />
+      </div>
+
+      {/* Policy summary */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {Object.entries(catCounts).map(([cat, count]) => (
+          <span key={cat} style={{
+            fontSize: 10,
+            padding: '2px 8px',
+            borderRadius: 10,
+            background: `${CAT_COLORS[cat] ?? 'var(--color-muted)'}20`,
+            color: CAT_COLORS[cat] ?? 'var(--color-muted)',
+            border: `1px solid ${CAT_COLORS[cat] ?? 'var(--color-muted)'}40`,
+          }}>
+            {cat}: {count}
+          </span>
+        ))}
+      </div>
+
+      {/* Filtered list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {filtered.length === 0 && (
+          <p style={{ color: 'var(--color-muted)', fontSize: 12 }}>{query ? 'No matching assertions.' : 'None listed.'}</p>
+        )}
+        {filtered.map((assertion, i) => {
+          const cat = categorizeAssertion(assertion);
+          return (
+            <div key={assertion} className="action-row" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 8px', borderRadius: 6, border: '1px solid rgba(61,73,76,0.2)' }}>
+              <div className="action-num" style={{ minWidth: 24, fontSize: 10, color: 'var(--color-muted)', fontFamily: 'var(--font-mono)', paddingTop: 2 }}>{String(i + 1).padStart(2, '0')}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-on-surface)', fontFamily: 'var(--font-mono)' }}>{assertion}</span>
+                  <span style={{
+                    fontSize: 9,
+                    padding: '1px 6px',
+                    borderRadius: 8,
+                    background: `${CAT_COLORS[cat] ?? 'var(--color-muted)'}20`,
+                    color: CAT_COLORS[cat] ?? 'var(--color-muted)',
+                  }}>
+                    {cat}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Binary Inspector (hex view + structure tree) ─────────────── */
+
+function BinaryInspector({ binary }: { binary: BinaryInfo }) {
+  const [selectedStructure, setSelectedStructure] = useState<number | null>(null);
+
+  if (!binary || !binary.hexPreview) {
+    return <div style={{ color: 'var(--color-muted)', fontSize: 12 }}>No binary data available.</div>;
+  }
+
+  // Parse hex lines into structured data for interactive display
+  const hexLines = binary.hexPreview.split('\n').filter(Boolean);
+  const structItems = binary.structure ?? [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Info bar */}
+      <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}>
+        <span>Type: <strong style={{ color: 'var(--color-primary)' }}>{binary.detectedType}</strong></span>
+        <span>Size: <strong>{binary.fileSize.toLocaleString()}B</strong></span>
+        <span>Entropy: <strong>{binary.entropy.toFixed(2)}</strong></span>
+        <span>Magic: <strong style={{ color: 'var(--color-tertiary)' }}>{binary.magicBytes}</strong></span>
+      </div>
+
+      {/* Structure tree (if available) */}
+      {structItems.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)', marginBottom: 2 }}>Structure</div>
+          {structItems.map((s, i) => (
+            <div
+              key={i}
+              onClick={() => setSelectedStructure(selectedStructure === i ? null : i)}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(60px, auto) 90px 60px 1fr',
+                gap: 8,
+                fontSize: 11,
+                fontFamily: 'var(--font-mono)',
+                padding: '3px 6px',
+                borderRadius: 4,
+                cursor: 'pointer',
+                background: selectedStructure === i ? 'rgba(76, 215, 246, 0.1)' : 'transparent',
+                border: selectedStructure === i ? '1px solid rgba(76, 215, 246, 0.3)' : '1px solid transparent',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => { if (selectedStructure !== i) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+              onMouseLeave={(e) => { if (selectedStructure !== i) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <span style={{ color: 'var(--color-primary)', fontWeight: 500 }}>{s.name}</span>
+              <span style={{ color: '#94a3b8' }}>0x{s.offset.toString(16).padStart(6, '0')}</span>
+              <span style={{ color: '#94a3b8' }}>{s.length}B</span>
+              <span style={{ color: 'var(--color-on-surface-variant)' }}>{s.description}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Hex dump */}
+      <div style={{ position: 'relative' }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)', marginBottom: 2 }}>
+          Hex Dump
+          {selectedStructure !== null && structItems[selectedStructure] && (
+            <span style={{ fontWeight: 400, marginLeft: 8, color: 'var(--color-primary)' }}>
+              — {structItems[selectedStructure].name} @ 0x{structItems[selectedStructure].offset.toString(16)}
+            </span>
+          )}
+        </div>
+        <pre
+          className="hex-view"
+          style={{
+            fontSize: 11,
+            lineHeight: 1.6,
+            maxHeight: 350,
+            overflow: 'auto',
+            color: 'var(--color-on-surface)',
+            background: 'var(--color-surface)',
+            padding: 8,
+            borderRadius: 6,
+            border: '1px solid rgba(61,73,76,0.3)',
+            fontFamily: 'var(--font-mono)',
+            whiteSpace: 'pre',
+          }}
+        >
+          {selectedStructure !== null && structItems[selectedStructure] ? (() => {
+            const sel = structItems[selectedStructure];
+            const selStart = sel.offset;
+            const selEnd = sel.offset + sel.length;
+            return hexLines.map((line, i) => {
+              // Parse offset from line: "00000000  xx xx xx ..."
+              const lineOffset = parseInt(line.slice(0, 8), 16);
+              if (isNaN(lineOffset)) return <div key={i}>{line}</div>;
+              const lineEnd = lineOffset + 16;
+              const overlaps = lineEnd > selStart && lineOffset < selEnd;
+              return (
+                <div key={i} style={{
+                  background: overlaps ? 'rgba(76, 215, 246, 0.08)' : 'transparent',
+                  borderLeft: overlaps ? '2px solid var(--color-primary)' : '2px solid transparent',
+                  paddingLeft: 4,
+                }}>
+                  {line}
+                </div>
+              );
+            });
+          })() : hexLines.map((line, i) => <div key={i}>{line}</div>)}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 /* ── Metadata Tab ────────────────────────────────────────────── */
 
 function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
@@ -400,50 +634,21 @@ function MetadataTab({ file, sha256 }: { file: File | null; sha256: string }) {
               {section.label}
             </button>
           ))}
-          {metadata.binary.structure.length > 0 && (
-            <button
-              className={`tab-btn ${activeSection === 'structure' ? 'active' : ''}`}
-              type="button"
-              style={{ fontSize: 12, padding: '4px 10px' }}
-              onClick={() => setActiveSection('structure')}
-            >
-              Binary Structure
-            </button>
-          )}
           <button
             className={`tab-btn ${activeSection === 'hex' ? 'active' : ''}`}
             type="button"
             style={{ fontSize: 12, padding: '4px 10px' }}
             onClick={() => setActiveSection('hex')}
           >
-            Hex View
+            Binary Inspector
           </button>
         </div>
 
         {/* Content */}
         <div style={{ marginTop: 12 }}>
           {activeSection === 'hex' ? (
-            <pre className="hex-view" style={{ fontSize: 11, lineHeight: 1.5, maxHeight: 400, overflow: 'auto', color: 'var(--color-on-surface)' }}>
-              {metadata.binary.hexPreview}
-            </pre>
-          ) : activeSection === 'structure' ? (
-            <div className="binary-structure">
-              {metadata.binary.structure.length === 0 ? (
-                <span style={{ color: 'var(--color-on-surface-variant)' }}>No structure detected for this file type.</span>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {metadata.binary.structure.map((s, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '80px 80px 80px 1fr', gap: 8, fontSize: 12, fontFamily: 'var(--font-mono)', padding: '4px 0', borderBottom: '1px solid rgba(61,73,76,0.2)' }}>
-                      <span style={{ color: 'var(--color-primary)' }}>{s.name}</span>
-                      <span style={{ color: '#94a3b8' }}>0x{s.offset.toString(16).padStart(6, '0')}</span>
-                      <span style={{ color: '#94a3b8' }}>{s.length}B</span>
-                      <span style={{ color: 'var(--color-on-surface-variant)' }}>{s.description}</span>
-                    </div>
-                  ))}
-            </div>
-          )}
-        </div>
-      ) : (
+            <BinaryInspector binary={metadata.binary} />
+          ) : (
             metadata.sections.filter(s => s.label === activeSection).map((section) => (
               <div key={section.label} className="metadata-entries">
                 {section.entries.map((entry) => (
@@ -3229,8 +3434,12 @@ function NlpDetailPanel({ item }: { item: TextItem }) {
     .sort(([, a], [, b]) => b - a);
   const totalTokens = a.nlpTokenCount || 1;
 
-  const sentimentLabel = a.nlpSentiment > 0.2 ? 'Positive' : a.nlpSentiment < -0.2 ? 'Negative' : 'Neutral';
-  const sentimentColor = a.nlpSentiment > 0.2 ? 'var(--color-tertiary)' : a.nlpSentiment < -0.2 ? '#f87171' : 'var(--color-muted)';
+  const nlpSent = a.nlpSentiment ?? 0;
+  const sentSs = a.sentenceSentiments ?? [];
+  const entityDens = a.entityDensity ?? 0;
+
+  const sentimentLabel = nlpSent > 0.2 ? 'Positive' : nlpSent < -0.2 ? 'Negative' : 'Neutral';
+  const sentimentColor = nlpSent > 0.2 ? 'var(--color-tertiary)' : nlpSent < -0.2 ? '#f87171' : 'var(--color-muted)';
 
   const entityTypeCounts: Record<string, number> = {};
   for (const e of a.entities) {
@@ -3254,33 +3463,33 @@ function NlpDetailPanel({ item }: { item: TextItem }) {
           <div style={{ flex: 1, height: 8, background: 'var(--color-surface-alt)', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{
               height: '100%',
-              width: `${Math.abs(a.nlpSentiment) * 50 + 50}%`,
-              marginLeft: a.nlpSentiment < 0 ? 'auto' : 0,
+              width: `${Math.abs(nlpSent) * 50 + 50}%`,
+              marginLeft: nlpSent < 0 ? 'auto' : 0,
               background: sentimentColor,
               borderRadius: 4,
               transition: 'width 0.3s',
             }} />
           </div>
           <strong style={{ color: sentimentColor, minWidth: 60, textAlign: 'right' }}>
-            {a.nlpSentiment.toFixed(2)}
+            {nlpSent.toFixed(2)}
           </strong>
         </div>
         <span style={{ color: sentimentColor, fontSize: '0.8rem' }}>{sentimentLabel}</span>
 
-        {a.sentenceSentiments.length > 1 && (
+        {sentSs.length > 1 && (
           <div style={{ marginTop: '0.75rem' }}>
             <div className="txt-section-title" style={{ fontSize: '0.7rem' }}>Per-sentence sentiment</div>
             <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: '0.25rem' }}>
-              {a.sentenceSentiments.map((s, i) => (
+              {sentSs.map((s, i) => (
                 <div
                   key={i}
-                  title={`Sentence ${i + 1}: ${s.toFixed(2)}`}
+                  title={`Sentence ${i + 1}: ${(s ?? 0).toFixed(2)}`}
                   style={{
                     width: 16,
                     height: 16,
                     borderRadius: 3,
-                    background: s > 0.2 ? 'var(--color-tertiary)' : s < -0.2 ? '#f87171' : 'var(--color-surface-alt)',
-                    opacity: 0.5 + Math.abs(s) * 0.5,
+                    background: (s ?? 0) > 0.2 ? 'var(--color-tertiary)' : (s ?? 0) < -0.2 ? '#f87171' : 'var(--color-surface-alt)',
+                    opacity: 0.5 + Math.abs(s ?? 0) * 0.5,
                   }}
                 />
               ))}
@@ -3294,7 +3503,7 @@ function NlpDetailPanel({ item }: { item: TextItem }) {
         <div className="txt-section-title">
           Named Entities
           <span style={{ marginLeft: '0.5rem', fontWeight: 400, color: 'var(--color-muted)', fontSize: '0.75rem' }}>
-            {a.entities.length} found · {a.entityDensity.toFixed(1)} per sentence
+            {a.entities.length} found · {entityDens.toFixed(1)} per sentence
           </span>
         </div>
         {a.entities.length === 0 ? (
@@ -3354,19 +3563,19 @@ function NlpDetailPanel({ item }: { item: TextItem }) {
         <div className="txt-stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           <div className="txt-stat">
             <span>Adjective Density</span>
-            <strong>{a.adjectiveDensity}%</strong>
+            <strong>{(a.adjectiveDensity ?? 0)}%</strong>
           </div>
           <div className="txt-stat">
             <span>Noun Density</span>
-            <strong>{a.nounDensity}%</strong>
+            <strong>{(a.nounDensity ?? 0)}%</strong>
           </div>
           <div className="txt-stat">
             <span>Passive Voice Est.</span>
-            <strong>{a.passiveEstimate}%</strong>
+            <strong>{(a.passiveEstimate ?? 0)}%</strong>
           </div>
           <div className="txt-stat">
             <span>Pronoun Ratio</span>
-            <strong>{a.pronounRatio}%</strong>
+            <strong>{(a.pronounRatio ?? 0)}%</strong>
           </div>
         </div>
       </div>
@@ -5122,20 +5331,7 @@ export default function App() {
                     <span className="badge">{activeManifest ? `${activeManifest.assertions.length} Assertions` : 'Pending'}</span>
                   </div>
                   {activeManifest ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {activeManifest.assertions.map((assertion, i) => (
-                        <div className="action-row" key={assertion}>
-                          <div className="action-num">{String(i + 1).padStart(2, '0')}</div>
-                          <div className="action-content">
-                            <div className="action-header">
-                              <span className="action-name">{assertion}</span>
-                            </div>
-                            <p className="action-desc">Assertion detected in C2PA manifest.</p>
-                          </div>
-                        </div>
-                      ))}
-                      {activeManifest.assertions.length === 0 && <p className="muted">None listed.</p>}
-                    </div>
+                    <AssertionSearch assertions={activeManifest.assertions} />
                   ) : (
                     <EmptyInspector />
                   )}

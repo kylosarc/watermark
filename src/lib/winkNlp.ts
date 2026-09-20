@@ -82,8 +82,13 @@ export async function analyzeWithNlp(text: string): Promise<NlpAnalysis | null> 
     const sentenceCount = sentences.length();
     const sentenceSentiments: number[] = [];
     sentences.each((s: import('wink-nlp').ItemSentence) => {
-      const span = s.out(its.span) as number[];
-      sentenceSentiments.push(nlp.its.sentiment(span) as number);
+      try {
+        const sentText = s.out() as string;
+        const sentDoc = nlp.readDoc(sentText);
+        sentenceSentiments.push(sentDoc.out(its.sentiment) as number);
+      } catch {
+        sentenceSentiments.push(0);
+      }
     });
 
     const tokens = doc.tokens();
