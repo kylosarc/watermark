@@ -3937,6 +3937,75 @@ function NlpDetailPanel({ item }: { item: TextItem }) {
         )}
       </div>
 
+      {/* Combined Metrics Table — POS + Writing Style */}
+      <div className="txt-section">
+        <div className="txt-section-title">
+          Language Metrics
+          <span style={{ marginLeft: '0.5rem', fontWeight: 400, color: 'var(--color-muted)', fontSize: '0.75rem' }}>
+            {a.nlpTokenCount} tokens · {posEntries.length} POS tags
+          </span>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid rgba(61,73,76,0.3)' }}>
+              <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-muted)', fontWeight: 500 }}>Metric</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-muted)', fontWeight: 500 }}>Count / Value</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-muted)', fontWeight: 500, minWidth: 80 }}>%</th>
+              <th style={{ textAlign: 'right', padding: '6px 8px', color: 'var(--color-muted)', fontWeight: 500, minWidth: 100 }}>Bar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* POS tags */}
+            {posEntries.map(([pos, count]) => {
+              const pct = (count / totalTokens) * 100;
+              const label = POS_LABELS[pos] ?? pos;
+              return (
+                <tr key={`pos-${pos}`} style={{ borderBottom: '1px solid rgba(61,73,76,0.15)' }}>
+                  <td style={{ padding: '5px 8px', color: 'var(--color-on-surface)' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--color-primary)', marginRight: 6 }}>{pos}</span>
+                    {label}
+                  </td>
+                  <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--color-on-surface)' }}>{count}</td>
+                  <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--color-muted)' }}>{pct.toFixed(1)}%</td>
+                  <td style={{ padding: '5px 8px' }}>
+                    <div style={{ height: 6, background: 'var(--color-surface-alt)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: 'var(--color-primary)', borderRadius: 3 }} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {/* Divider */}
+            {posEntries.length > 0 && (
+              <tr><td colSpan={4} style={{ padding: '4px 0', borderBottom: '2px solid rgba(61,73,76,0.3)' }} /></tr>
+            )}
+            {/* Writing Style */}
+            {[
+              ['Adjective Density', a.adjectiveDensity ?? 0, '%'],
+              ['Noun Density', a.nounDensity ?? 0, '%'],
+              ['Passive Voice Est.', a.passiveEstimate ?? 0, '%'],
+              ['Pronoun Ratio', a.pronounRatio ?? 0, '%'],
+              ['Sentence Uniformity', a.sentenceUniformity ?? 0, '/100'],
+              ['Repetition Score', a.repetitionScore ?? 0, '%'],
+            ].map(([label, val, unit]) => {
+              const value = Number(val);
+              return (
+              <tr key={label} style={{ borderBottom: '1px solid rgba(61,73,76,0.15)' }}>
+                <td style={{ padding: '5px 8px', color: 'var(--color-on-surface)' }}>{label}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--color-secondary)' }}>{value.toFixed(1)}{unit}</td>
+                <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--color-muted)' }}>{value.toFixed(1)}{unit === '/100' ? '' : '%'}</td>
+                <td style={{ padding: '5px 8px' }}>
+                  <div style={{ height: 6, background: 'var(--color-surface-alt)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(100, value)}%`, background: value > 50 ? 'var(--color-tertiary)' : value > 20 ? 'var(--color-primary)' : 'var(--color-secondary)', borderRadius: 3 }} />
+                  </div>
+                </td>
+              </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
       {/* Entities */}
       <div className="txt-section">
         <div className="txt-section-title">
@@ -3948,81 +4017,29 @@ function NlpDetailPanel({ item }: { item: TextItem }) {
         {a.entities.length === 0 ? (
           <p style={{ color: 'var(--color-muted)', fontSize: '0.8rem' }}>No named entities detected.</p>
         ) : (
-          <>
-            {Object.keys(entityTypeCounts).length > 0 && (
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                {Object.entries(entityTypeCounts).map(([type, count]) => (
-                  <span key={type} className="txt-batch-item-badge" style={{ fontSize: '0.7rem' }}>
-                    {type}: {count}
-                  </span>
-                ))}
-              </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(61,73,76,0.3)' }}>
+                <th style={{ textAlign: 'left', padding: '5px 8px', color: 'var(--color-muted)', fontWeight: 500 }}>Entity</th>
+                <th style={{ textAlign: 'right', padding: '5px 8px', color: 'var(--color-muted)', fontWeight: 500 }}>Type</th>
+              </tr>
+            </thead>
+            <tbody>
               {a.entities.map((e, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                  <span style={{ color: 'var(--color-text)' }}>{e.text}</span>
-                  <span className="txt-batch-item-badge" style={{ fontSize: '0.65rem' }}>{e.type}</span>
-                </div>
+                <tr key={i} style={{ borderBottom: '1px solid rgba(61,73,76,0.15)' }}>
+                  <td style={{ padding: '4px 8px', color: 'var(--color-on-surface)' }}>{e.text}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right' }}>
+                    <span className="txt-batch-item-badge" style={{ fontSize: '0.65rem' }}>{e.type}</span>
+                  </td>
+                </tr>
               ))}
-            </div>
-          </>
+            </tbody>
+          </table>
         )}
-      </div>
-
-      {/* POS Distribution */}
-      <div className="txt-section">
-        <div className="txt-section-title">
-          Part-of-Speech Distribution
-          <span style={{ marginLeft: '0.5rem', fontWeight: 400, color: 'var(--color-muted)', fontSize: '0.75rem' }}>
-            {a.nlpTokenCount} tokens
-          </span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          {posEntries.map(([pos, count]) => {
-            const pct = (count / totalTokens) * 100;
-            const label = POS_LABELS[pos] ?? pos;
-            return (
-              <div key={pos} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
-                <span style={{ minWidth: 90, color: 'var(--color-muted)' }}>{label}</span>
-                <div style={{ flex: 1, height: 6, background: 'var(--color-surface-alt)', borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${pct}%`, background: 'var(--color-primary)', borderRadius: 3 }} />
-                </div>
-                <span style={{ minWidth: 36, textAlign: 'right', color: 'var(--color-text)' }}>{count}</span>
-                <span style={{ minWidth: 40, textAlign: 'right', color: 'var(--color-muted)', fontSize: '0.7rem' }}>{pct.toFixed(1)}%</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Writing Style Metrics */}
-      <div className="txt-section">
-        <div className="txt-section-title">Writing Style</div>
-        <div className="txt-stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-          <div className="txt-stat">
-            <span>Adjective Density</span>
-            <strong>{(a.adjectiveDensity ?? 0)}%</strong>
-          </div>
-          <div className="txt-stat">
-            <span>Noun Density</span>
-            <strong>{(a.nounDensity ?? 0)}%</strong>
-          </div>
-          <div className="txt-stat">
-            <span>Passive Voice Est.</span>
-            <strong>{(a.passiveEstimate ?? 0)}%</strong>
-          </div>
-          <div className="txt-stat">
-            <span>Pronoun Ratio</span>
-            <strong>{(a.pronounRatio ?? 0)}%</strong>
-          </div>
-        </div>
       </div>
     </div>
   );
 }
-
-/* ── Text Transform Panel (Stripper / Unsloper) ─────────────────── */
 
 interface DiffLine {
   type: 'unchanged' | 'removed' | 'added';
