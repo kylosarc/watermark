@@ -1,4 +1,4 @@
-import { createC2pa } from '@contentauth/c2pa-web';
+import { createC2pa, Reader } from '@contentauth/c2pa-web';
 import wasmSrc from '@contentauth/c2pa-web/resources/c2pa.wasm?url';
 import type { VerificationResult } from './types';
 import { getMediaFormat, sha256Hex } from './file';
@@ -18,7 +18,10 @@ export async function verifyFile(file: File): Promise<VerificationResult> {
 
   try {
     const sdk = await getC2pa();
-    const reader = await sdk.reader.fromBlob(getMediaFormat(fileName, mimeType), file);
+    const format = getMediaFormat(fileName, mimeType);
+
+    // 0.15.x: use static Reader.fromBlob() — old sdk.reader pattern is removed
+    const reader = await Reader.fromBlob(sdk, format, file);
 
     if (!reader) {
       return missingCredentialResult(fileName, file.size, mimeType, sha256);

@@ -18,6 +18,7 @@ export interface ManifestSummary {
   issuer?: string;
   signatureAlgorithm?: string;
   signedAt?: string;
+  claimVersion?: number;
   ingredients: string[];
   assertions: string[];
   validationCodes: ValidationCode[];

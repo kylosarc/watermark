@@ -146,6 +146,7 @@ export function summarizeManifestStore(
       issuer: asText(signature?.issuer) ?? asText(signature?.common_name),
       signatureAlgorithm: asText(signature?.alg),
       signedAt: asText(signature?.time),
+      claimVersion: manifest.claim_version ?? undefined,
       ingredients: (manifest.ingredients ?? []).map(getIngredientLabel),
       assertions: getAssertionLabels(manifest),
       validationCodes: uniqueCodes([

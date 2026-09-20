@@ -5184,6 +5184,46 @@ export default function App() {
     }
   }
 
+  /** Extract a poster frame from a video file using canvas */
+  async function extractVideoPoster(file: File): Promise<string | null> {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      const objectUrl = URL.createObjectURL(file);
+      video.src = objectUrl;
+
+      const cleanup = () => { URL.revokeObjectURL(objectUrl); };
+
+      video.onloadeddata = () => {
+        // Seek to 10% or 1 second, whichever is less
+        video.currentTime = Math.min(1, video.duration * 0.1);
+      };
+
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth || 640;
+          canvas.height = video.videoHeight || 360;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { cleanup(); resolve(null); return; }
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          cleanup();
+          resolve(dataUrl);
+        } catch {
+          cleanup();
+          resolve(null);
+        }
+      };
+
+      video.onerror = () => { cleanup(); resolve(null); };
+      // Timeout after 5 seconds
+      setTimeout(() => { cleanup(); resolve(null); }, 5000);
+    });
+  }
+
   async function handleFile(file: File | undefined) {
     if (!file) return;
     setIsVerifying(true);
@@ -5193,7 +5233,12 @@ export default function App() {
     storeFileInfo(file);
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
 
-    const nextPreview = file.type.startsWith('image/') ? window.URL.createObjectURL(file) : null;
+    let nextPreview: string | null = null;
+    if (file.type.startsWith('image/')) {
+      nextPreview = window.URL.createObjectURL(file);
+    } else if (file.type.startsWith('video/')) {
+      nextPreview = await extractVideoPoster(file);
+    }
     setPreviewUrl(nextPreview);
 
     try {
@@ -5818,6 +5863,68 @@ export default function App() {
                     >
                       <Download size={14} /> Generate Trust Report
                     </button>
+                  </div>
+                )}
+
+                {/* Verification Summary Card — screenshot-friendly */}
+                {result && (
+                  <div id="verification-summary-card" style={{
+                    padding: 20,
+                    borderRadius: 12,
+                    background: 'linear-gradient(135deg, #0f1117 0%, #1a1d27 100%)',
+                    border: '1px solid rgba(61,73,76,0.4)',
+                    color: '#e2e8f0',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <CheckCircle2 size={18} style={{ color: result.validationState === 'Trusted' ? 'var(--color-tertiary)' : result.validationState === 'Valid' ? 'var(--color-primary)' : '#f87171' }} />
+                      <span style={{ fontSize: 14, fontWeight: 700 }}>C2PA Verification Summary</span>
+                      <span style={{
+                        marginLeft: 'auto',
+                        fontSize: 10,
+                        padding: '2px 8px',
+                        borderRadius: 10,
+                        background: result.validationState === 'Trusted' ? 'rgba(78,222,163,0.15)' : result.validationState === 'Valid' ? 'rgba(76,215,246,0.15)' : 'rgba(248,113,113,0.15)',
+                        color: result.validationState === 'Trusted' ? 'var(--color-tertiary)' : result.validationState === 'Valid' ? 'var(--color-primary)' : '#f87171',
+                        fontWeight: 600,
+                      }}>
+                        {result.validationState}
+                      </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px 16px', fontSize: 11 }}>
+                      <div><span style={{ color: '#64748b' }}>File</span><br /><strong style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{result.fileName}</strong></div>
+                      <div><span style={{ color: '#64748b' }}>Size</span><br /><strong>{formatBytes(result.fileSize)}</strong></div>
+                      <div><span style={{ color: '#64748b' }}>Type</span><br /><strong style={{ color: 'var(--color-primary)' }}>{result.mimeType}</strong></div>
+                      <div><span style={{ color: '#64748b' }}>Manifests</span><br /><strong>{result.manifestCount}</strong></div>
+                      {activeManifest && <>
+                        <div><span style={{ color: '#64748b' }}>Issuer</span><br /><strong>{activeManifest.issuer ?? '—'}</strong></div>
+                        <div><span style={{ color: '#64748b' }}>Algorithm</span><br /><strong style={{ color: 'var(--color-primary)' }}>{activeManifest.signatureAlgorithm ?? '—'}</strong></div>
+                        <div><span style={{ color: '#64748b' }}>Signed</span><br /><strong>{formatDate(activeManifest.signedAt)}</strong></div>
+                        <div><span style={{ color: '#64748b' }}>Assertions</span><br /><strong>{activeManifest.assertions.length}</strong></div>
+                        {activeManifest.claimVersion !== undefined && (
+                          <div><span style={{ color: '#64748b' }}>Claim Version</span><br /><strong style={{ color: 'var(--color-secondary)' }}>v{activeManifest.claimVersion}</strong></div>
+                        )}
+                      </>}
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: 9, color: '#475569', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+                      SHA-256: {result.sha256}
+                    </div>
+                    <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                      <button className="action-tactile button-ghost" type="button" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => {
+                        const card = document.getElementById('verification-summary-card');
+                        if (card) {
+                          navigator.clipboard.writeText(card.innerText);
+                          showToast('Summary copied to clipboard');
+                        }
+                      }}>
+                        <Copy size={12} /> Copy Text
+                      </button>
+                      <button className="action-tactile button-ghost" type="button" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => {
+                        navigator.clipboard.writeText(result.sha256);
+                        showToast('SHA-256 copied');
+                      }}>
+                        <Copy size={12} /> Copy Hash
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
