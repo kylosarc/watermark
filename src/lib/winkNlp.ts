@@ -5,24 +5,32 @@
 let _nlp: ReturnType<typeof import('wink-nlp')['default']> | null = null;
 let _initAttempted = false;
 let _initError: string | null = null;
+let _initPromise: Promise<any> | null = null;
 
 async function getNlp() {
   if (_nlp) return _nlp;
-  if (_initAttempted) return null;
-  _initAttempted = true;
-  try {
-    const winkModule = await import('wink-nlp');
-    const modelModule = await import('wink-eng-lite-web-model');
-    // CJS interop: default may be nested or may be the module itself
-    const winkNLP = (winkModule as any).default ?? winkModule;
-    const model = (modelModule as any).default ?? modelModule;
-    _nlp = winkNLP(model);
-    return _nlp;
-  } catch (err) {
-    _initError = err instanceof Error ? err.message : String(err);
-    console.error('[winkNlp] Init failed:', _initError);
-    return null;
-  }
+  if (_initError) return null; // failed permanently this session
+  if (_initPromise) return _initPromise;
+
+  _initPromise = (async () => {
+    try {
+      const winkModule = await import('wink-nlp');
+      const modelModule = await import('wink-eng-lite-web-model');
+      // CJS interop: default may be nested or may be the module itself
+      const winkNLP = (winkModule as any).default ?? winkModule;
+      const model = (modelModule as any).default ?? modelModule;
+      _nlp = winkNLP(model);
+      _initAttempted = true;
+      return _nlp;
+    } catch (err) {
+      _initError = err instanceof Error ? err.message : String(err);
+      console.error('[winkNlp] Init failed:', _initError);
+      _initPromise = null;
+      return null;
+    }
+  })();
+
+  return _initPromise;
 }
 
 export function getWinkStatus(): { initialized: boolean; error: string | null } {
