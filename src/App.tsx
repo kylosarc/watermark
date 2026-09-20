@@ -5381,6 +5381,57 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* AI Generation Warning */}
+                {activeManifest?.isAIGenerated && (
+                  <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Sparkles size={18} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#f59e0b' }}>AI-Generated Content Detected</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 2 }}>
+                        Digital source type: <code style={{ color: 'var(--color-primary)' }}>{activeManifest.digitalSourceType}</code>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Watermark / SynthID Claims */}
+                {activeManifest?.watermarkClaims && activeManifest.watermarkClaims.length > 0 && (
+                  <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.25)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Eye size={18} style={{ color: '#a855f7', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#a855f7' }}>Embedded Watermark Claimed</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 2 }}>
+                        {activeManifest.watermarkClaims.join(', ')} — pixel-level verification not available locally.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Soft Binding Info */}
+                {activeManifest?.softBinding && activeManifest.softBinding.length > 0 && (
+                  <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(78, 222, 163, 0.08)', border: '1px solid rgba(78, 222, 163, 0.25)', marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-tertiary)', marginBottom: 4 }}>Soft Binding Present (C2PA 2.2+)</div>
+                    <div style={{ fontSize: 11, color: 'var(--color-muted)' }}>
+                      This manifest includes soft binding — an invisible content fingerprint that can recover provenance even after hard metadata is stripped.
+                    </div>
+                    {activeManifest.softBinding.map((sb, i) => (
+                      <div key={i} style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--color-on-surface)', marginTop: 4 }}>
+                        {sb.algorithm}: {sb.value.slice(0, 60)}{sb.value.length > 60 ? '…' : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Trust Info Summary */}
+                {activeManifest && (
+                  <div style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--color-surface)', border: '1px solid rgba(61,73,76,0.2)', marginBottom: 12, fontSize: 11, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    <div><span style={{ color: 'var(--color-muted)' }}>Trust:</span> <span style={{ color: result?.validationState === 'Trusted' ? 'var(--color-tertiary)' : result?.validationState === 'Valid' ? 'var(--color-primary)' : '#f87171', fontWeight: 600 }}>{result?.validationState ?? 'Unknown'}</span></div>
+                    <div><span style={{ color: 'var(--color-muted)' }}>Issuer:</span> <span style={{ color: 'var(--color-on-surface)' }}>{activeManifest.issuer ?? 'Unknown'}</span></div>
+                    <div><span style={{ color: 'var(--color-muted)' }}>Algorithm:</span> <span style={{ color: 'var(--color-on-surface)' }}>{activeManifest.signatureAlgorithm ?? 'Unknown'}</span></div>
+                    <div><span style={{ color: 'var(--color-muted)' }}>Manifests:</span> <span style={{ color: 'var(--color-on-surface)' }}>{result?.manifestCount ?? 0}</span></div>
+                  </div>
+                )}
+
                 <div className="panel" style={{ padding: 16 }}>
                   <div className="section-heading">
                     <h2>Provenance Credentials Identity</h2>

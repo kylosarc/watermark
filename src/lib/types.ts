@@ -21,6 +21,22 @@ export interface ManifestSummary {
   ingredients: string[];
   assertions: string[];
   validationCodes: ValidationCode[];
+  // C2PA 2.2+ soft binding
+  softBinding?: { algorithm: string; value: string }[];
+  // Signature chain details
+  signatureInfo?: {
+    issuer?: string;
+    commonName?: string;
+    notBefore?: string;
+    notAfter?: string;
+    serialNumber?: string;
+    digestAlgorithm?: string;
+  };
+  // AI generation signals
+  digitalSourceType?: string;
+  isAIGenerated?: boolean;
+  // SynthID / watermark claims
+  watermarkClaims?: string[];
 }
 
 export interface VerificationResult {

@@ -1,6 +1,18 @@
 import type { Ingredient, Manifest, ManifestStore, ValidationStatus } from '@contentauth/c2pa-web';
 import type { ManifestSummary, ValidationCode, ValidationState, VerificationResult } from './types';
 
+// AI generation indicators from DigitalSourceType
+const AI_SOURCE_TYPES = new Set([
+  'http://c2pa.org/digitalsourcetype/trainedAlgorithmicMedia',
+  'http://c2pa.org/digitalsourcetype/algorithmicMedia',
+  'http://c2pa.org/digitalsourcetype/compositeWithTrainedAlgorithmicMedia',
+  'http://c2pa.org/digitalsourcetype/algorithmicallyEnhanced',
+  'http://c2pa.org/digitalsourcetype/dataDrivenMedia',
+]);
+
+// Watermark / SynthID assertion labels
+const WATERMARK_PATTERNS = /synthid|watermark|stable.?signature|deep.?fake|invisible.?watermark/i;
+
 function asText(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
@@ -101,6 +113,30 @@ export function summarizeManifestStore(
 
   const manifests: ManifestSummary[] = entries.map(([key, manifest]) => {
     const signature = manifest.signature_info;
+
+    // Extract soft binding assertions
+    const softBinding = (manifest.assertions ?? [])
+      .filter((a) => a.label.toLowerCase().includes('softbinding') || a.label.toLowerCase().includes('soft_binding'))
+      .map((a) => ({ algorithm: a.label, value: JSON.stringify(a.data ?? '') }));
+
+    // Extract digital source type for AI detection
+    const digitalSourceType = (() => {
+      for (const a of (manifest.assertions ?? [])) {
+        if (a.label === 'c2pa.actions' && Array.isArray(a.data)) {
+          for (const action of a.data) {
+            if (action.digitalSource) return action.digitalSource;
+            if (action.type?.digitalSource) return action.type.digitalSource;
+          }
+        }
+      }
+      return undefined;
+    })();
+
+    // Check for watermark / SynthID claims
+    const watermarkClaims = (manifest.assertions ?? [])
+      .filter((a) => WATERMARK_PATTERNS.test(a.label) || WATERMARK_PATTERNS.test(JSON.stringify(a.data ?? '')))
+      .map((a) => a.label);
+
     return {
       label: asText(manifest.label) ?? key,
       isActive: activeManifest ? asText(manifest.label) === activeManifest : false,
@@ -115,7 +151,11 @@ export function summarizeManifestStore(
       validationCodes: uniqueCodes([
         ...getStoreCodes(store),
         ...getManifestCodes(manifest)
-      ])
+      ]),
+      softBinding: softBinding.length > 0 ? softBinding : undefined,
+      digitalSourceType: digitalSourceType ?? undefined,
+      isAIGenerated: digitalSourceType ? AI_SOURCE_TYPES.has(digitalSourceType) : undefined,
+      watermarkClaims: watermarkClaims.length > 0 ? watermarkClaims : undefined,
     };
   });
 
