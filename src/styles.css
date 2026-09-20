@@ -30,6 +30,43 @@
   -webkit-font-smoothing: antialiased;
 }
 
+[data-theme="light"] {
+  --color-primary: #0891b2;
+  --color-primary-dim: #0e7490;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #cffafe;
+  --color-secondary: #7c3aed;
+  --color-secondary-container: #ede9fe;
+  --color-tertiary: #059669;
+  --color-tertiary-container: #d1fae5;
+  --color-error: #dc2626;
+  --color-surface: #f8fafc;
+  --color-surface-dim: #f1f5f9;
+  --color-surface-bright: #ffffff;
+  --color-surface-lowest: #ffffff;
+  --color-surface-low: #f1f5f9;
+  --color-surface-container: #e2e8f0;
+  --color-surface-high: #cbd5e1;
+  --color-surface-highest: #94a3b8;
+  --color-surface-variant: #cbd5e1;
+  --color-on-surface: #1e293b;
+  --color-on-surface-dim: #475569;
+  --color-outline: #64748b;
+  --color-outline-variant: #cbd5e1;
+  color: #1e293b;
+  background: #f8fafc;
+}
+
+[data-theme="light"] .hex-view {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="light"] pre {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

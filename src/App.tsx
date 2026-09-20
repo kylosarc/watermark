@@ -6092,6 +6092,20 @@ function Header({ view, setView }: { view: View; setView: (view: View) => void }
 /* ── Footer ──────────────────────────────────────────────────── */
 
 function Footer() {
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('wm:theme') as 'dark' | 'light') || 'dark');
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    localStorage.setItem('wm:theme', next);
+    document.documentElement.setAttribute('data-theme', next);
+  };
+
+  // Apply theme on mount
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, []);
+
   return (
     <footer className="system-footer">
       <div className="footer-items">
@@ -6105,8 +6119,28 @@ function Footer() {
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-on-surface)' }}>
           <Lock size={14} style={{ color: 'var(--color-secondary)' }} />
-          SDK @contentauth/c2pa-web v0.14.5 Loaded
+          SDK @contentauth/c2pa-web v0.15.1 Loaded
         </span>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          style={{
+            background: 'none',
+            border: '1px solid var(--color-outline-variant)',
+            borderRadius: 4,
+            padding: '2px 8px',
+            cursor: 'pointer',
+            fontSize: 11,
+            color: 'var(--color-on-surface)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {theme === 'dark' ? <span>☀️</span> : <span>🌙</span>}
+          {theme === 'dark' ? 'Light' : 'Dark'}
+        </button>
       </div>
       <span className="footer-trust">Zero-Trust Sandbox</span>
     </footer>
