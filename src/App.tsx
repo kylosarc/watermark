@@ -5169,10 +5169,24 @@ export default function App() {
   }, [view]);
 
   // Keyboard shortcuts
+  const [showShortcuts, setShowShortcuts] = useState(false);
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+      // ? → open keyboard shortcut cheat sheet
+      if (e.key === '?' && !isInput) {
+        e.preventDefault();
+        setShowShortcuts((v) => !v);
+        return;
+      }
+
+      // Escape → close cheat sheet
+      if (e.key === 'Escape' && showShortcuts) {
+        setShowShortcuts(false);
+        return;
+      }
 
       // Ctrl/Cmd + Shift + C → copy SHA-256 of selected item
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
@@ -5191,7 +5205,7 @@ export default function App() {
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showToast]);
+  }, [showToast, showShortcuts]);
 
   // Persistence: restore file info from stored result
   useEffect(() => {
@@ -6048,6 +6062,29 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* Keyboard Shortcuts Modal */}
+      {showShortcuts && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowShortcuts(false)}>
+          <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-outline-variant)', borderRadius: 12, padding: 24, maxWidth: 480, width: '90%' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--color-on-surface)' }}>Keyboard Shortcuts</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                ['?', 'Toggle this cheat sheet'],
+                ['Ctrl/⌘ + Shift + C', 'Copy SHA-256 hash'],
+                ['↑ / ↓', 'Navigate text batch items'],
+                ['Escape', 'Close modal'],
+              ].map(([key, desc]) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <kbd style={{ background: 'var(--color-surface-high)', border: '1px solid var(--color-outline-variant)', borderRadius: 4, padding: '3px 8px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-primary)', minWidth: 120, textAlign: 'center' }}>{key}</kbd>
+                  <span style={{ fontSize: 12, color: 'var(--color-on-surface)' }}>{desc}</span>
+                </div>
+              ))}
+            </div>
+            <button className="action-tactile button-ghost" type="button" style={{ marginTop: 16, fontSize: 12 }} onClick={() => setShowShortcuts(false)}>Close</button>
+          </div>
+        </div>
+      )}
 
       <Footer />
       <ToastContainer toasts={toasts} />
