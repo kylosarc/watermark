@@ -246,7 +246,18 @@ export function ProvenanceGraph({ result, onNodeClick }: ProvenanceGraphProps) {
   const [containerSize, setContainerSize] = useState({ w: 800, h: 520 });
   const dragging = useRef<{ startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
 
-  const { nodes, edges } = result ? buildGraph(result) : { nodes: [], edges: [] };
+  // Safe graph build — catch errors to prevent app crash
+  let nodes: ProvenanceNode[] = [];
+  let edges: ProvenanceEdge[] = [];
+  try {
+    if (result) {
+      const graph = buildGraph(result);
+      nodes = graph.nodes;
+      edges = graph.edges;
+    }
+  } catch (err) {
+    console.error('[ProvenanceGraph] buildGraph failed:', err);
+  }
 
   // Track container size
   useEffect(() => {

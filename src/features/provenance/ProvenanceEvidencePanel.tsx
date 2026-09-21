@@ -403,7 +403,12 @@ export function ProvenanceEvidencePanel({ result, selectedNodeId, onClose }: Pro
   }
 
   const manifest = result.manifests.find((m) => m.isActive) ?? result.manifests[0];
-  const findings = deriveFindings(result);
+  let findings: Finding[] = [];
+  try {
+    findings = deriveFindings(result);
+  } catch (err) {
+    console.error('[ProvenanceEvidencePanel] deriveFindings failed:', err);
+  }
 
   const nodeType = selectedNodeId as NodeType;
   const meta = NODE_META[nodeType] ?? NODE_META.file;
