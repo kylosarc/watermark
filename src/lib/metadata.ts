@@ -27,6 +27,7 @@ export interface BinaryInfo {
   entropy: number;
   hexPreview: string;
   structure: BinaryStructure[];
+  entropyHeatmap: { offset: number; entropy: number }[];
 }
 
 export interface BinaryStructure {
@@ -85,6 +86,31 @@ function calculateEntropy(data: Uint8Array): number {
     }
   }
   return Math.round(entropy * 1000) / 1000;
+}
+
+/** Calculate Shannon entropy for a byte range */
+function blockEntropy(data: Uint8Array, start: number, end: number): number {
+  const freq = new Array(256).fill(0);
+  const len = Math.min(end, data.length) - start;
+  if (len <= 0) return 0;
+  for (let i = start; i < start + len; i++) freq[data[i]]++;
+  let entropy = 0;
+  for (const f of freq) {
+    if (f > 0) {
+      const p = f / len;
+      entropy -= p * Math.log2(p);
+    }
+  }
+  return entropy;
+}
+
+/** Compute entropy heatmap data: array of { offset, entropy } for each block */
+export function computeEntropyHeatmap(data: Uint8Array, blockSize = 256): { offset: number; entropy: number }[] {
+  const blocks: { offset: number; entropy: number }[] = [];
+  for (let i = 0; i < data.length; i += blockSize) {
+    blocks.push({ offset: i, entropy: blockEntropy(data, i, i + blockSize) });
+  }
+  return blocks;
 }
 
 // ── Hex Preview ────────────────────────────────────────────────
@@ -297,7 +323,7 @@ export async function extractFileMetadata(file: File, sha256: string): Promise<F
       mimeType: file?.type ?? 'unknown',
       sha256: sha256 || '',
       sections: [],
-      binary: { magicBytes: '', detectedType: 'unknown', fileSize: file?.size ?? 0, entropy: 0, hexPreview: '', structure: [] },
+      binary: { magicBytes: '', detectedType: 'unknown', fileSize: file?.size ?? 0, entropy: 0, hexPreview: '', structure: [], entropyHeatmap: [] },
       raw: {},
     };
   }
@@ -316,6 +342,11 @@ export async function extractFileMetadata(file: File, sha256: string): Promise<F
 
   // Binary structure
   const structure = detectStructure(data, file.type);
+
+  // Entropy heatmap (max 512 blocks for performance)
+  const blockCount = Math.min(512, Math.ceil(data.length / 256));
+  const blockSize = Math.ceil(data.length / blockCount);
+  const entropyHeatmap = computeEntropyHeatmap(data, blockSize);
 
   // Image metadata
   let sections: MetadataSection[] = [];
@@ -348,6 +379,7 @@ export async function extractFileMetadata(file: File, sha256: string): Promise<F
       entropy,
       hexPreview,
       structure,
+      entropyHeatmap,
     },
     raw: {},
   };

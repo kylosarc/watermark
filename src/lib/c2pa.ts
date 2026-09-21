@@ -3,6 +3,7 @@ import wasmSrc from '@contentauth/c2pa-web/resources/c2pa.wasm?url';
 import type { VerificationResult } from './types';
 import { getMediaFormat, sha256Hex } from './file';
 import { errorResult, missingCredentialResult, summarizeManifestStore } from './verification';
+import { auditLog } from './audit';
 
 let sdkPromise: Promise<Awaited<ReturnType<typeof createC2pa>>> | undefined;
 
@@ -29,7 +30,9 @@ export async function verifyFile(file: File): Promise<VerificationResult> {
 
     try {
       const store = await reader.manifestStore();
-      return summarizeManifestStore(store, fileName, file.size, mimeType, sha256);
+      const result = summarizeManifestStore(store, fileName, file.size, mimeType, sha256);
+      auditLog('verify', `${fileName} → ${result.validationState} (${result.manifestCount} manifests)`, 'verify');
+      return result;
     } finally {
       await reader.free().catch(() => undefined);
     }

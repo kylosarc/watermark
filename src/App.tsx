@@ -79,6 +79,7 @@ import {
   storeMediaBatch, getStoredMediaBatch,
   clearAll,
 } from './lib/persist';
+import { loadAuditTrail, getAuditEntries, clearAuditTrail, exportAuditTrail, auditLog, type AuditEntry } from './lib/audit';
 import './styles.css';
 
 const ACCEPTED_TYPES = 'image/*,video/mp4,video/quicktime,audio/*';
@@ -531,6 +532,42 @@ function BinaryInspector({ binary }: { binary: BinaryInfo }) {
         <span>Magic: <strong style={{ color: 'var(--color-tertiary)' }}>{binary.magicBytes}</strong></span>
       </div>
 
+      {/* Entropy Heatmap */}
+      {binary.entropyHeatmap && binary.entropyHeatmap.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)', marginBottom: 4 }}>Entropy Heatmap</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1, padding: '4px 0' }}>
+            {binary.entropyHeatmap.map((block, i) => {
+              // Color: low entropy = blue, medium = green, high = red
+              const ratio = block.entropy / 8;
+              const hue = (1 - ratio) * 240; // 240=blue, 0=red
+              const sat = 70 + ratio * 30;
+              const light = 30 + ratio * 25;
+              return (
+                <div
+                  key={i}
+                  title={`Offset 0x${block.offset.toString(16)}: entropy ${block.entropy.toFixed(2)}`}
+                  style={{
+                    width: 6,
+                    height: 14,
+                    borderRadius: 1,
+                    background: `hsl(${hue}, ${sat}%, ${light}%)`,
+                    flexShrink: 0,
+                  }}
+                />
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--color-muted)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+            <span>Low (0.0)</span>
+            <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <div style={{ width: 40, height: 6, borderRadius: 3, background: 'linear-gradient(to right, hsl(240,70%,30%), hsl(120,80%,40%), hsl(0,100%,45%))' }} />
+            </div>
+            <span>High (8.0)</span>
+          </div>
+        </div>
+      )}
+
       {/* Structure tree (if available) */}
       {structItems.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -895,14 +932,85 @@ function EmptyInspector() {
 }
 
 function FutureView({ view, result }: { view: Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>; result: VerificationResult | null }) {
-  const titles: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>, string> = {
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>(() => loadAuditTrail());
+
+  // Refresh audit trail when view changes
+  useEffect(() => {
+    if (view === 'settings') {
+      setAuditEntries(getAuditEntries());
+    }
+  }, [view]);
+
+  if (view === 'settings') {
+    return (
+      <main className="app-main" style={{ padding: 16, maxWidth: 700, margin: '0 auto' }}>
+        <h2 style={{ marginBottom: 16 }}>Audit Trail</h2>
+        <p style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 16 }}>
+          Timestamped log of all verification, export, and edit actions in this session.
+        </p>
+        {auditEntries.length === 0 ? (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-muted)', fontSize: 12, background: 'var(--color-surface)', borderRadius: 8 }}>
+            No audit entries yet. Verify a file to start logging.
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button className="action-tactile button-ghost" type="button" style={{ fontSize: 11 }} onClick={() => {
+                const blob = new Blob([exportAuditTrail()], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = 'audit-trail.json'; a.click(); URL.revokeObjectURL(url);
+              }}>
+                <Download size={12} /> Export JSON
+              </button>
+              <button className="action-tactile button-ghost" type="button" style={{ fontSize: 11, color: '#f87171' }} onClick={() => { clearAuditTrail(); setAuditEntries([]); }}>
+                <Trash2 size={12} /> Clear
+              </button>
+            </div>
+            <div style={{ background: 'var(--color-surface)', borderRadius: 8, border: '1px solid rgba(61,73,76,0.3)', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid rgba(61,73,76,0.3)' }}>
+                    <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--color-muted)', fontWeight: 500 }}>Time</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--color-muted)', fontWeight: 500 }}>Action</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--color-muted)', fontWeight: 500 }}>Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditEntries.slice().reverse().map((entry) => (
+                    <tr key={entry.id} style={{ borderBottom: '1px solid rgba(61,73,76,0.15)' }}>
+                      <td style={{ padding: '6px 10px', fontFamily: 'var(--font-mono)', color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
+                        {new Date(entry.timestamp).toLocaleTimeString()}
+                      </td>
+                      <td style={{ padding: '6px 10px' }}>
+                        <span style={{
+                          padding: '1px 6px',
+                          borderRadius: 8,
+                          fontSize: 10,
+                          fontWeight: 600,
+                          background: entry.category === 'verify' ? 'rgba(76,215,246,0.1)' : entry.category === 'export' ? 'rgba(78,222,163,0.1)' : entry.category === 'edit' ? 'rgba(245,158,11,0.1)' : 'rgba(148,163,184,0.1)',
+                          color: entry.category === 'verify' ? 'var(--color-primary)' : entry.category === 'export' ? 'var(--color-tertiary)' : entry.category === 'edit' ? '#f59e0b' : 'var(--color-muted)',
+                        }}>
+                          {entry.action}
+                        </span>
+                      </td>
+                      <td style={{ padding: '6px 10px', color: 'var(--color-on-surface)' }}>{entry.detail}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </main>
+    );
+  }
+
+  const titles: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text' | 'settings'>, string> = {
     evidence: 'Evidence Export',
-    settings: 'Trust Anchors / Settings',
     edit: 'Edit with Provenance'
   };
-  const descriptions: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>, string> = {
+  const descriptions: Record<Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text' | 'settings'>, string> = {
     evidence: 'Package verification results, hashes, and validation codes for review.',
-    settings: 'Configure trust policy and local processing preferences.',
     edit: 'Crop images with full visibility into how the operation affects content binding.'
   };
 
@@ -3049,6 +3157,11 @@ interface TextItem {
 
 let textIdCounter = 0;
 
+// Module-level file store — persists across tab switches
+let _currentFile: File | null = null;
+let _currentPreviewUrl: string | null = null;
+export function getCurrentFile(): File | null { return _currentFile; }
+
 function TextView({ showToast }: { showToast: (msg: string) => void }) {
   const [items, setItems] = useState<TextItem[]>(() => {
     const stored = getStoredTextItems();
@@ -5185,6 +5298,27 @@ export default function App() {
     storeLastView(view);
   }, [view]);
 
+  // Clipboard monitor — auto-verify pasted images
+  useEffect(() => {
+    async function handlePaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            auditLog('paste', `Pasted image: ${file.type}`, 'system');
+            await handleFile(file);
+            showToast('Pasted image auto-verified');
+            return;
+          }
+        }
+      }
+    }
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [showToast]);
+
   // Keyboard shortcuts
   const [showShortcuts, setShowShortcuts] = useState(false);
   useEffect(() => {
@@ -5268,7 +5402,8 @@ export default function App() {
       const blob = await response.blob();
       const sampleFile = new File([blob], SAMPLE_NAME, { type: 'image/jpeg' });
       const nextPreview = window.URL.createObjectURL(blob);
-      setPreviewUrl(nextPreview);
+    setPreviewUrl(nextPreview);
+    _currentPreviewUrl = nextPreview;
       const nextResult = await verifyFile(sampleFile);
       if (sampleActiveRef.current) {
         setResult(nextResult);
@@ -5329,6 +5464,7 @@ export default function App() {
     setIsSample(false);
     setResult(null);
     setFile(file);
+    _currentFile = file;
     storeFileInfo(file);
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
 
