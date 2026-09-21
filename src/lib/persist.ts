@@ -46,6 +46,66 @@ function safeRemove(key: string): void {
   } catch { /* ignore */ }
 }
 
+// ── IndexedDB for File Blob storage ─────────────────────────────
+
+const DB_NAME = 'watermark-files';
+const DB_VERSION = 1;
+const STORE_NAME = 'blobs';
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE_NAME);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** Store a File blob in IndexedDB */
+export async function storeFileBlob(file: File): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(file, 'currentFile');
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch { /* IndexedDB unavailable */ }
+}
+
+/** Retrieve the stored File blob from IndexedDB */
+export async function getStoredFileBlob(): Promise<File | null> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get('currentFile');
+    const file = await new Promise<File | undefined>((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return file ?? null;
+  } catch { return null; }
+}
+
+/** Clear stored file blob */
+export async function clearFileBlob(): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete('currentFile');
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch { /* ignore */ }
+}
+
 // ── Serializable file info (File objects can't be stored) ───────
 
 export interface StoredFileInfo {

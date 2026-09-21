@@ -79,6 +79,7 @@ import {
   storeMediaBatch, getStoredMediaBatch,
   clearAll,
 } from './lib/persist';
+import { storeFileBlob, getStoredFileBlob, clearFileBlob } from './lib/persist';
 import { loadAuditTrail, getAuditEntries, clearAuditTrail, exportAuditTrail, auditLog, type AuditEntry } from './lib/audit';
 import './styles.css';
 
@@ -5358,15 +5359,26 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showToast, showShortcuts]);
 
-  // Persistence: restore file info from stored result
+  // Persistence: restore file from IndexedDB on mount
   useEffect(() => {
     if (hasRestoredRef.current) return;
     hasRestoredRef.current = true;
-    const storedFile = getStoredFileInfo();
-    if (storedFile && !file) {
-      // We can't restore the actual File object, but we can show the name
-      // The user will need to re-drop to get full functionality
+    const storedResult = getStoredResult();
+    if (storedResult) {
+      setResult(storedResult);
     }
+    // Restore file blob from IndexedDB
+    getStoredFileBlob().then((blob) => {
+      if (blob && !file) {
+        setFile(blob);
+        _currentFile = blob;
+        if (blob.type.startsWith('image/')) {
+          setPreviewUrl(URL.createObjectURL(blob));
+        } else if (blob.type.startsWith('video/')) {
+          extractVideoPoster(blob).then(setPreviewUrl);
+        }
+      }
+    }).catch(() => {});
   }, []);
 
   // Telemetry offset fluctuation
@@ -5466,6 +5478,7 @@ export default function App() {
     setFile(file);
     _currentFile = file;
     storeFileInfo(file);
+    storeFileBlob(file); // persist to IndexedDB for cross-tab access
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
 
     let nextPreview: string | null = null;
@@ -5509,9 +5522,12 @@ export default function App() {
     setPreviewUrl(null);
     setResult(null);
     setFile(null);
+    _currentFile = null;
+    _currentPreviewUrl = null;
     setIsSample(false);
     setZoom(100);
     clearAll();
+    clearFileBlob();
     showToast('Local session reset. Memory buffer cleared.');
   }
 
