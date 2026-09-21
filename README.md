@@ -11,46 +11,69 @@
 <p align="center">
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19"/>
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 5"/>
-  <img src="https://img.shields.io/badge/C2PA-0.14.5-4cd7f6?style=flat-square&logo=contentauthenticityinitiative&logoColor=white" alt="C2PA 0.14.5"/>
+  <img src="https://img.shields.io/badge/C2PA-0.15.1-4cd7f6?style=flat-square&logo=contentauthenticityinitiative&logoColor=white" alt="C2PA 0.15.1"/>
   <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8"/>
-  <img src="https://img.shields.io/badge/Tests-4%20Passing-brightgreen?style=flat-square&logo=jest&logoColor=white" alt="Tests Passing"/>
 </p>
 
 ---
 
 # Watermark
 
-Watermark is a local-first web application for inspecting C2PA Content Credentials and understanding media provenance. The first release verifies media in the browser, computes a SHA-256 digest, distinguishes valid signatures from trusted issuers, and displays manifest lineage without uploading the asset.
+A local-first forensic web application for inspecting C2PA Content Credentials, analyzing media provenance, and understanding AI-generation signals. Everything runs in your browser — no data ever leaves your machine.
 
-## Current scope
+## Features
 
-- Drag-and-drop image, audio, and video inspection
-- C2PA manifest discovery and verification through `@contentauth/c2pa-web`
-- Signature algorithm, issuer, claim generator, ingredients, assertions, and validation codes
-- File size, MIME type, and SHA-256 display
-- Explicit handling for missing, invalid, untrusted, and unsupported credentials
-- Browser-only processing with no application backend
+### Core Verification
+- **C2PA Manifest Discovery** — automatic detection and verification via `@contentauth/c2pa-web` v0.15.1
+- **Trust Status** — Trusted / Valid / Invalid / Unknown with issuer chain details
+- **Signature Algorithm & Timestamp** — which algorithm signed, when, by whom
+- **Content Binding** — SHA-256 hard binding verification
+- **Soft Binding Detection** — C2PA 2.2+ invisible content fingerprints for provenance recovery
+- **AI Generation Detection** — flags `trainedAlgorithmicMedia`, `compositeWithTrainedAlgorithmicMedia`, etc.
+- **Watermark / SynthID Claims** — surfaces embedded watermark assertions from manifests
 
-## Important notes
+### Inspector Views
+- **Manifest Overview** — identity, cryptographic checks, trust summary, verification summary card (screenshot-friendly)
+- **Assertions & Ingredients** — searchable assertion list with category badges (binding, signature, provenance, technical)
+- **Cryptography** — signature validation, certificate chain status
+- **Raw JSON** — full C2PA manifest dump for debugging
+- **File Metadata** — EXIF, camera info, GPS, copyright, AI detection, plus tabs for:
+  - **Binary Inspector** — hex view + structure tree + entropy heatmap
+  - **Hash Calculator** — SHA-256, SHA-1, MD5 with copy buttons
+  - **Metadata Editor** — edit EXIF fields in-place
+  - **Metadata Sanitizer** — strip metadata by preset (minimal, social, professional, forensic, privacy)
 
-**This software is under active development and contains known bugs.** While we strive for accuracy, results may not always be as expected.
+### Text Analysis
+- **Text Analysis** — word count, sentence count, AI-confidence scoring, vocabulary richness, burstiness
+- **NLP Analysis** — sentiment, POS distribution, named entities, writing style metrics (all in unified table)
+- **Grammar Checker** — Harper.js WASM-based grammar and spelling suggestions
+- **Text Transformer** — strip PII, HTML, markdown, normalize whitespace, detect homoglyphs
+- **Unsloper** — remove AI-generated writing patterns ("In today's fast-paced world...")
+- **Clipboard Monitor** — auto-verifies images pasted via Ctrl+V
 
-### Text processing limitations
+### Batch & Comparison
+- **Batch Report** — verify multiple files at once, CSV/JSON export
+- **Provenance Diff** — side-by-side comparison of two manifest versions
+- **Evidence Pack** — structured JSON export with full verification data
 
-- Not all text documents are suitable for processing in all modes. PDFs with letter-spacing (e.g., stylized headers like "K Y L O S A R C") may produce garbled output when using grammar checking features.
-- Scientific notation, chemical formulas, and technical content may be incorrectly flagged or modified by grammar/linting tools.
-- Text extraction from PDFs, Word documents, and PowerPoint files may lose formatting, embedded images, or complex layouts.
-- The unsloper and stripper tools are designed for prose text and may not work well on code, technical documentation, or structured data.
+### Simulation & Testing
+- **What Would Break?** — simulate transformations (re-encode, crop, format convert) and check if C2PA survives
+- **What-If Scenario Builder** — 10 real-world scenarios (screenshot, social upload, email, etc.)
+- **Watermark Survival Matrix** — which operations preserve/destroy which watermark types (C2PA, EXIF, Soft Binding, SynthID, Stable Signature)
+- **Trust Policy Playground** — build custom policies (require assertions, reject algorithms, trust levels)
 
-### Video and media limitations
+### Editing
+- **Edit with Provenance** — canvas-based crop with before/after SHA-256 comparison, privacy crop option
+- **Trust Report** — one-click self-contained HTML report for sharing with clients
+- **Provenance-aware image editing** — warns when operations will invalidate content binding
 
-- Video files do not always load a playable preview or reference thumbnail. In these cases, you will still see watermarking details, C2PA manifest information, and metadata — but no video playback.
-- Large video files may take longer to process or may not fully load in the browser.
-- Some media formats may not be fully supported by the C2PA SDK.
-
-### Your files are safe
-
-**Original documents and media are never overwritten by Watermark.** All processing happens in memory and produces a new output — your source files remain completely untouched on disk. Even if results are unexpected or processing fails, there is no risk to your original files.
+### Cross-Cutting
+- **Dark/Light Theme** — toggle in footer, persists to localStorage
+- **Keyboard Shortcuts** — `?` cheat sheet, `Ctrl+Shift+C` copy hash, arrows navigate
+- **Audit Trail** — timestamped log of all actions, exportable as JSON
+- **Cross-Tab Persistence** — files stored in IndexedDB, survive tab switches
+- **Entropy Heatmap** — color-coded byte-range visualization in binary inspector
+- **Video Poster Frames** — auto-extracts thumbnail from video files
 
 ## Run locally
 
@@ -71,31 +94,42 @@ npm test
 
 ## Architecture
 
-- `src/App.tsx` contains the drop zone, preview, result views, and text/batch views.
-- `src/lib/c2pa.ts` owns SDK initialization and file verification.
-- `src/lib/verification.ts` normalizes SDK manifest data into a stable UI model.
-- `src/lib/file.ts` contains MIME detection, byte formatting, and SHA-256 utilities.
-- `src/lib/types.ts` defines the application verification contract.
-- `src/lib/transform.ts` provides text stripping, PII redaction, unsloping, and PDF normalization.
-- `src/lib/harper.ts` integrates the Harper grammar checker (WASM-based, browser-local).
-- `src/lib/metadata.ts` handles file metadata extraction, sanitization, and editing.
-- `src/lib/extract.ts` extracts text from PDFs, Word documents, and PowerPoint files.
+- `src/App.tsx` — all views and components (~6300 lines)
+- `src/lib/c2pa.ts` — C2PA SDK wrapper (v0.15.1 `Reader.fromBlob()` API)
+- `src/lib/verification.ts` — manifest summarization, AI detection, soft binding, watermark claims
+- `src/lib/metadata.ts` — EXIF extraction, binary analysis, entropy heatmap, sanitizer, editor, piexifjs/picscrub
+- `src/lib/harper.ts` — grammar checker (WASM, lazy-loaded)
+- `src/lib/winkNlp.ts` — NLP analysis (sentiment, POS, entities)
+- `src/lib/transform.ts` — text stripping, PII redaction, unsloping, homoglyph detection
+- `src/lib/extract.ts` — text extraction from PDF, PPTX, DOCX (with jschardet encoding detection)
+- `src/lib/file.ts` — hashing (SHA-256, SHA-1, MD5), format detection
+- `src/lib/persist.ts` — localStorage + IndexedDB persistence
+- `src/lib/audit.ts` — session audit trail
 
-The C2PA SDK runs in a Web Worker with its WASM binary loaded as a Vite asset. The app does not currently create or re-sign manifests; editing and signing require a separate key-management and provenance update design.
+## Important notes
+
+**This software is under active development.** While we strive for accuracy, results may not always be as expected.
+
+### Text processing limitations
+
+- PDFs with letter-spacing may produce garbled output in grammar features
+- Scientific notation, chemical formulas, and technical content may be incorrectly flagged
+- Text extraction may lose formatting, embedded images, or complex layouts
+- The unsloper is designed for prose and may not work on code or technical docs
+
+### Video and media limitations
+
+- Video files show a poster frame extracted at 10% duration
+- Large video files may take longer to process
+- Some media formats may not be fully supported by the C2PA SDK
+
+### Your files are safe
+
+**Original documents and media are never overwritten.** All processing happens in memory. Your source files remain completely untouched on disk.
 
 ## Verification boundaries
 
-A trusted C2PA result means the SDK validated the manifest signature, content binding, and issuer trust policy available to the application. It does not prove that every statement in the manifest is true. A missing manifest does not establish that content is human-made or AI-generated.
-
-## Next modules
-
-1. ✅ Privacy-safe metadata sanitizer with an explicit field allowlist.
-2. ✅ Text analysis with AI detection, grammar checking (Harper), and unsloping.
-3. ✅ File metadata viewer and editor.
-4. Provenance-aware crop, resize, and compression workflow.
-5. Local lineage dashboard backed by IndexedDB.
-6. AI-detection appeal evidence export.
-7. Educational views for C2PA, SynthID, statistical watermarking, and steganalysis.
+A trusted C2PA result means the SDK validated the manifest signature, content binding, and issuer trust policy. It does not prove that every statement in the manifest is true. A missing manifest does not establish that content is human-made or AI-generated.
 
 ## References
 
@@ -104,6 +138,10 @@ A trusted C2PA result means the SDK validated the manifest signature, content bi
 - [Supported C2PA media formats](https://opensource.contentauthenticity.org/docs/c2patool/docs/supported-formats)
 - [SynthID overview](https://deepmind.google/technologies/synthid)
 - [Harper - Grammar checker](https://github.com/Automattic/harper)
+- [wink-nlp - NLP toolkit](https://github.com/winkjs/wink-nlp)
+- [exifr - EXIF reader](https://github.com/MikeKovarik/exifr)
+- [piexifjs - EXIF writer](https://github.com/hMatoba/piexifjs)
+- [picscrub - Metadata scrubber](https://github.com/asher-wood/picscrub)
 
 ## License
 

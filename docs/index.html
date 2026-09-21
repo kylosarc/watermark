@@ -641,12 +641,12 @@
           <div class="feature-card">
             <div class="feature-card-icon" style="background:var(--color-primary-dim);color:var(--color-primary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
             <h3>C2PA Verification</h3>
-            <p>Full manifest chain validation via WebAssembly — issuer, trust, algorithm, and assertion verification.</p>
+            <p>Full manifest chain validation via WebAssembly — v0.15.1 SDK with static Reader API. Issuer, trust, algorithm, and assertion verification.</p>
           </div>
           <div class="feature-card">
             <div class="feature-card-icon" style="background:var(--color-tertiary-dim);color:var(--color-tertiary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></div>
             <h3>Manifest Overview</h3>
-            <p>View active manifest, trust status, claim generator, signed date, and validation state at a glance.</p>
+            <p>View active manifest, trust status, claim generator, signed date, and validation state at a glance. Includes verification summary card for screenshots.</p>
           </div>
           <div class="feature-card">
             <div class="feature-card-icon" style="background:var(--color-secondary-dim);color:var(--color-secondary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
@@ -655,8 +655,18 @@
           </div>
           <div class="feature-card">
             <div class="feature-card-icon" style="background:rgba(245,158,11,0.1);color:var(--color-warning)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
-            <h3>SHA-256 Hashing</h3>
-            <p>Browser-native cryptographic hashing via SubtleCrypto for content binding verification.</p>
+            <h3>Multi-Algorithm Hashing</h3>
+            <p>SHA-256, SHA-1, and MD5 computed in parallel. Copy individual hashes or all at once.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card-icon" style="background:rgba(239,68,68,0.1);color:var(--color-danger)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg></div>
+            <h3>Entropy Heatmap</h3>
+            <p>Color-coded byte-range visualization showing compression, encryption, and embedded data hotspots across the file.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-card-icon" style="background:rgba(168,85,247,0.1);color:#a855f7"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <h3>AI Detection & Soft Binding</h3>
+            <p>Surfaces AI-generated indicators from DigitalSourceType, SynthID/watermark claims, and C2PA 2.2+ soft binding fingerprints.</p>
           </div>
         </div>
       </section>
@@ -709,7 +719,7 @@
       <section class="section" id="simulator">
         <div class="section-icon danger"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
         <h2>What Would Break?</h2>
-        <p class="subtitle">Simulate 12 common transformations to see which would destroy C2PA credentials.</p>
+        <p class="subtitle">Simulate transformations and real-world scenarios to see which would destroy C2PA credentials.</p>
 
         <div class="feature-grid">
           <div class="feature-card">
@@ -721,7 +731,15 @@
             <p>Visual results grid showing which operations preserved credentials and which broke them.</p>
           </div>
           <div class="feature-card">
-            <h3>JSON Export</h3>
+            <h3>What-If Scenario Builder</h3>
+            <p>10 real-world scenarios: screenshot, social upload, email, AirDrop, print-to-PDF, and more — with survival predictions.</p>
+          </div>
+          <div class="feature-card">
+            <h3>Watermark Survival Matrix</h3>
+            <p>Reference table showing which watermark types (C2PA, EXIF, Soft Binding, SynthID, Stable Signature) survive which operations.</p>
+          </div>
+          <div class="feature-card">
+            <h3>JSON / CSV Export</h3>
             <p>Export simulation results for compliance documentation or tamper-resistance analysis.</p>
           </div>
         </div>
@@ -912,7 +930,7 @@ matters. <span class="cmt">(2 patterns removed, 4 verbose → direct)</span></co
         <div class="tech-grid">
           <div class="tech-item">
             <h4 style="color:var(--color-primary)">C2PA Verification</h4>
-            <p>@contentauth/c2pa-web 0.14.5 — Browser WASM SDK for Content Credentials</p>
+            <p>@contentauth/c2pa-web 0.15.1 — Browser WASM SDK for Content Credentials</p>
           </div>
           <div class="tech-item">
             <h4 style="color:var(--color-secondary)">PDF Extraction</h4>
@@ -924,7 +942,27 @@ matters. <span class="cmt">(2 patterns removed, 4 verbose → direct)</span></co
           </div>
           <div class="tech-item">
             <h4 style="color:var(--color-warning)">Crypto</h4>
-            <p>SubtleCrypto — Browser-native SHA-256 hashing via WebCrypto API</p>
+            <p>SubtleCrypto — Browser-native SHA-256, SHA-1, MD5 hashing via WebCrypto API</p>
+          </div>
+          <div class="tech-item">
+            <h4>Grammar</h4>
+            <p>harper.js 2.10.0 — WASM-based grammar and spelling checker</p>
+          </div>
+          <div class="tech-item">
+            <h4>NLP</h4>
+            <p>wink-nlp — Sentiment analysis, POS tagging, named entity recognition</p>
+          </div>
+          <div class="tech-item">
+            <h4>EXIF</h4>
+            <p>exifr + piexifjs — EXIF extraction, write, and strip operations</p>
+          </div>
+          <div class="tech-item">
+            <h4>Metadata Scrubbing</h4>
+            <p>picscrub — Lossless metadata removal for JPEG, PNG, WebP, GIF, SVG, TIFF, HEIC</p>
+          </div>
+          <div class="tech-item">
+            <h4>Encoding Detection</h4>
+            <p>jschardet — Auto-detect text file encoding (ISO-8859-1, Windows-1252, etc.)</p>
           </div>
           <div class="tech-item">
             <h4>Framework</h4>
@@ -933,6 +971,10 @@ matters. <span class="cmt">(2 patterns removed, 4 verbose → direct)</span></co
           <div class="tech-item">
             <h4>Fonts</h4>
             <p>Geist (UI) + JetBrains Mono (code) — Tabular figures, ligatures</p>
+          </div>
+          <div class="tech-item">
+            <h4>Persistence</h4>
+            <p>localStorage + IndexedDB — Cross-tab file persistence, audit trail, session state</p>
           </div>
         </div>
       </section>
