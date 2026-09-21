@@ -446,6 +446,56 @@ pre {
   border: none;
 }
 
+/* ── Mode Selector (Segmented Control) ─────────────────────── */
+
+.mode-selector {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--color-surface-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 8px;
+  padding: 2px;
+  margin: 0 16px;
+}
+
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-on-surface-dim);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.mode-btn:hover:not(:disabled) {
+  color: var(--color-on-surface);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.mode-btn.active {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  font-weight: 600;
+}
+
+.mode-btn-icon {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.mode-btn-label {
+  font-family: inherit;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -2119,6 +2169,22 @@ pre {
 
 @media (max-width: 768px) {
   .desktop-nav { display: none; }
+
+  .mode-selector {
+    margin: 0 8px;
+  }
+
+  .mode-btn-label {
+    display: none;
+  }
+
+  .mode-btn {
+    padding: 5px 8px;
+  }
+
+  .mode-btn-icon {
+    font-size: 1rem;
+  }
 
   .file-grid { grid-template-columns: repeat(2, 1fr); }
   .crypto-grid { grid-template-columns: 1fr; }

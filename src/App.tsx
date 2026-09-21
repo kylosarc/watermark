@@ -85,6 +85,7 @@ import './styles.css';
 const ACCEPTED_TYPES = 'image/*,video/mp4,video/quicktime,audio/*';
 const SAMPLE_NAME = 'alpine_dawn_capture_2025.jpg';
 
+type AppMode = 'inspect' | 'provenance' | 'transform';
 type View = 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text' | 'evidence' | 'settings' | 'edit';
 type InspectorTab = 'overview' | 'assertions' | 'cryptography' | 'metadata' | 'raw-json';
 
@@ -159,7 +160,7 @@ const STATUS_TONES: Record<VerificationStatus, string> = {
   error: 'danger'
 };
 
-const NAV_ITEMS = [
+const NAV_ITEMS_BASE = [
   { id: 'inspector' as View, label: 'Inspector', icon: ScanSearch },
   { id: 'edit' as View, label: 'Edit w/ Provenance', icon: Crop },
   { id: 'batch' as View, label: 'Batch Report', icon: List },
@@ -458,6 +459,26 @@ import { LineageView } from './features/provenance/LineageView';
 import { SimulatorView } from './features/simulator/SimulatorView';
 import { PlaygroundView } from './features/playground/PlaygroundView';
 import { TextView } from './features/text/TextView';
+import { ProvenanceGraph } from './features/provenance/ProvenanceGraph';
+
+/* ── Mode-aware NAV_ITEMS ──────────────────────────────────────── */
+
+const NAV_ITEMS: Record<AppMode, typeof NAV_ITEMS_BASE[number][]> = {
+  inspect: NAV_ITEMS_BASE.filter((item) =>
+    ['inspector', 'batch'].includes(item.id)
+  ),
+  provenance: NAV_ITEMS_BASE.filter((item) =>
+    ['diff', 'simulator', 'playground', 'lineage'].includes(item.id)
+  ),
+  transform: NAV_ITEMS_BASE.filter((item) =>
+    ['edit', 'text'].includes(item.id)
+  ),
+};
+
+/* Items always visible regardless of mode */
+const ALWAYS_VISIBLE = NAV_ITEMS_BASE.filter((item) =>
+  ['evidence', 'settings'].includes(item.id)
+);
 
 function FutureView({ view, result }: { view: Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>; result: VerificationResult | null }) {
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>(() => loadAuditTrail());
@@ -804,6 +825,10 @@ export function getCurrentFile(): File | null { return _currentFile; }
 /* ── Main App ────────────────────────────────────────────────── */
 
 export default function App() {
+  const [mode, setMode] = useState<AppMode>(() => {
+    const stored = localStorage.getItem('wm:appMode');
+    return (stored === 'inspect' || stored === 'provenance' || stored === 'transform') ? stored : 'inspect';
+  });
   const [view, setView] = useState<View>(() => (getStoredLastView() as View) || 'inspector');
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('overview');
   const [result, setResult] = useState<VerificationResult | null>(() => getStoredResult());
@@ -849,6 +874,11 @@ export default function App() {
     window.addEventListener('watermark:return-inspector', returnToInspector);
     return () => window.removeEventListener('watermark:return-inspector', returnToInspector);
   }, []);
+
+  // Persistence: save mode when it changes
+  useEffect(() => {
+    localStorage.setItem('wm:appMode', mode);
+  }, [mode]);
 
   // Persistence: save result when it changes
   useEffect(() => {
@@ -1131,7 +1161,7 @@ export default function App() {
   if (view === 'batch') {
     return (
       <div className="app-frame">
-        <Header view={view} setView={setView} />
+        <Header view={view} setView={setView} mode={mode} setMode={setMode} />
         <BatchView showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
@@ -1142,7 +1172,7 @@ export default function App() {
   if (view === 'diff') {
     return (
       <div className="app-frame">
-        <Header view={view} setView={setView} />
+        <Header view={view} setView={setView} mode={mode} setMode={setMode} />
         <DiffView showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
@@ -1153,7 +1183,7 @@ export default function App() {
   if (view === 'edit') {
     return (
       <div className="app-frame">
-        <Header view={view} setView={setView} />
+        <Header view={view} setView={setView} mode={mode} setMode={setMode} />
         <ProvenanceEditor result={result} showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
@@ -1164,7 +1194,7 @@ export default function App() {
   if (view === 'simulator') {
     return (
       <div className="app-frame">
-        <Header view={view} setView={setView} />
+        <Header view={view} setView={setView} mode={mode} setMode={setMode} />
         <SimulatorView showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
@@ -1175,7 +1205,7 @@ export default function App() {
   if (view === 'playground') {
     return (
       <div className="app-frame">
-        <Header view={view} setView={setView} />
+        <Header view={view} setView={setView} mode={mode} setMode={setMode} />
         <PlaygroundView showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
@@ -1186,7 +1216,7 @@ export default function App() {
   if (view === 'lineage') {
     return (
       <div className="app-frame">
-        <Header view={view} setView={setView} />
+        <Header view={view} setView={setView} mode={mode} setMode={setMode} />
         <LineageView result={result} showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
@@ -1197,7 +1227,7 @@ export default function App() {
   if (view === 'text') {
     return (
       <div className="app-frame">
-        <Header view={view} setView={setView} />
+        <Header view={view} setView={setView} mode={mode} setMode={setMode} />
         <TextView showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
@@ -1208,7 +1238,7 @@ export default function App() {
   if (view !== 'inspector') {
     return (
       <div className="app-frame">
-        <Header view={view} setView={setView} />
+        <Header view={view} setView={setView} mode={mode} setMode={setMode} />
         <FutureView view={view} result={result} />
         <Footer />
         <ToastContainer toasts={toasts} />
@@ -1218,7 +1248,7 @@ export default function App() {
 
   return (
     <div className={`app-frame ${isDragging ? 'is-dragging' : ''}`}>
-      <Header view={view} setView={setView} />
+      <Header view={view} setView={setView} mode={mode} setMode={setMode} />
 
       {/* Command Bar */}
       <section className="command-bar">
@@ -1609,6 +1639,19 @@ export default function App() {
                     <CryptoCheck label="Temporal Timestamp" value={result ? `${result.manifestCount} manifest${result.manifestCount === 1 ? '' : 's'}` : 'Pending'} passed={result ? result.manifestCount > 0 : undefined} />
                   </div>
                 </div>
+
+                {/* Provenance Graph — visual summary */}
+                {result && (
+                  <div className="panel" style={{ padding: 16 }}>
+                    <div className="section-heading">
+                      <h2>Provenance Chain</h2>
+                      <span className="badge">Graph</span>
+                    </div>
+                    <div style={{ height: 420, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(61,73,76,0.2)' }}>
+                      <ProvenanceGraph result={result} />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1824,7 +1867,15 @@ export default function App() {
 
 /* ── Header ──────────────────────────────────────────────────── */
 
-function Header({ view, setView }: { view: View; setView: (view: View) => void }) {
+const MODE_OPTIONS: { id: AppMode; label: string; icon: string }[] = [
+  { id: 'inspect', label: 'Inspect', icon: '🔍' },
+  { id: 'provenance', label: 'Provenance', icon: '🧬' },
+  { id: 'transform', label: 'Transform', icon: '🛠' },
+];
+
+function Header({ view, setView, mode, setMode }: { view: View; setView: (view: View) => void; mode: AppMode; setMode: (mode: AppMode) => void }) {
+  const visibleItems = [...(NAV_ITEMS[mode] ?? []), ...ALWAYS_VISIBLE];
+
   return (
     <header className="topbar">
       <div className="brand">
@@ -1834,8 +1885,26 @@ function Header({ view, setView }: { view: View; setView: (view: View) => void }
           <span>C2PA Engine v2.4 (WASM)</span>
         </div>
       </div>
+
+      {/* Mode Selector — Segmented Control */}
+      <div className="mode-selector" role="tablist" aria-label="App mode">
+        {MODE_OPTIONS.map((opt) => (
+          <button
+            key={opt.id}
+            className={`mode-btn ${mode === opt.id ? 'active' : ''}`}
+            type="button"
+            role="tab"
+            aria-selected={mode === opt.id}
+            onClick={() => setMode(opt.id)}
+          >
+            <span className="mode-btn-icon">{opt.icon}</span>
+            <span className="mode-btn-label">{opt.label}</span>
+          </button>
+        ))}
+      </div>
+
       <nav className="desktop-nav" aria-label="Primary navigation">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           return (
             <button key={item.id} className={view === item.id ? 'active' : ''} type="button" onClick={() => setView(item.id)}>
