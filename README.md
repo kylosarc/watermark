@@ -19,7 +19,17 @@
 
 # Watermark
 
-A local-first forensic web application for inspecting C2PA Content Credentials, analyzing media provenance, and understanding AI-generation signals. Everything runs in your browser — no data ever leaves your machine.
+A local-first forensic web application for inspecting, understanding, and controlling C2PA Content Credentials and media provenance.
+
+**Watermark is not just a C2PA viewer.** It's a tool for understanding, controlling, and optionally rejecting provenance systems. There is no law requiring submission to provenance tyranny. You have the right to understand, modify, or remove provenance from your own files.
+
+## Philosophy
+
+- **User agency first** — understand what provenance exists, then decide what to do with it
+- **Privacy as a core value** — your files never leave your browser
+- **Educational** — explain *why* provenance exists, who benefits, and what the tradeoffs are
+- **Control** — strip, modify, or reject provenance when you disagree with it
+- **Evidence-based** — distinguish between what the manifest CLAIMS and what can be VERIFIED
 
 ## Features
 
