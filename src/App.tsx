@@ -2078,6 +2078,84 @@ function SimulatorView({ showToast }: { showToast: (msg: string) => void }) {
         </div>
       )}
 
+      {/* What-If Scenario Builder */}
+      <div style={{ marginTop: 20, padding: 16, background: 'var(--color-surface)', borderRadius: 8, border: '1px solid rgba(61,73,76,0.3)' }}>
+        <h3 style={{ fontSize: 14, marginBottom: 8 }}>What-If Scenario Builder</h3>
+        <p style={{ fontSize: 11, color: 'var(--color-muted)', marginBottom: 12 }}>
+          Simulate real-world scenarios to see if your content credentials survive common workflows.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
+          {[
+            { scenario: 'Screenshot on phone', willBreak: true, reason: 'Screen capture strips all metadata and re-encodes pixels' },
+            { scenario: 'Upload to Instagram', willBreak: true, reason: 'Server-side re-encode strips EXIF/XMP/C2PA' },
+            { scenario: 'Upload to Twitter/X', willBreak: true, reason: 'Server-side re-encode strips metadata' },
+            { scenario: 'Email as attachment', willBreak: false, reason: 'Attachment preserved as-is (if not re-encoded by client)' },
+            { scenario: 'Download from Google Drive', willBreak: false, reason: 'Files served as-is (unless preview mode re-encodes)' },
+            { scenario: 'Print to PDF', willBreak: true, reason: 'PDF re-render strips source metadata' },
+            { scenario: 'Copy-paste in browser', willBreak: true, reason: 'Clipboard only carries pixel data, no metadata' },
+            { scenario: 'AirDrop to Mac', willBreak: false, reason: 'File transfer preserves bytes (if not previewed)' },
+            { scenario: 'Save As from browser', willBreak: false, reason: 'Original file bytes preserved' },
+            { scenario: 'Crop in photo editor', willBreak: true, reason: 'Re-encode invalidates content binding hash' },
+          ].map((s) => (
+            <div key={s.scenario} style={{ padding: 10, borderRadius: 6, background: s.willBreak ? 'rgba(239,68,68,0.05)' : 'rgba(34,197,94,0.05)', border: `1px solid ${s.willBreak ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                {s.willBreak ? <AlertTriangle size={14} style={{ color: '#ef4444' }} /> : <CheckCircle2 size={14} style={{ color: '#22c55e' }} />}
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-on-surface)' }}>{s.scenario}</span>
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--color-muted)' }}>{s.reason}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: s.willBreak ? '#ef4444' : '#22c55e', marginTop: 4 }}>
+                {s.willBreak ? 'Credentials: BROKEN' : 'Credentials: PRESERVED'}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Watermark Survival Matrix */}
+      <div style={{ marginTop: 16, padding: 16, background: 'var(--color-surface)', borderRadius: 8, border: '1px solid rgba(61,73,76,0.3)' }}>
+        <h3 style={{ fontSize: 14, marginBottom: 8 }}>Watermark Survival Matrix</h3>
+        <p style={{ fontSize: 11, color: 'var(--color-muted)', marginBottom: 12 }}>
+          Which watermark types survive which operations. Soft binding can recover provenance even after hard metadata is stripped.
+        </p>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid rgba(61,73,76,0.3)' }}>
+                <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--color-muted)' }}>Operation</th>
+                <th style={{ textAlign: 'center', padding: '6px 6px', color: 'var(--color-primary)' }}>C2PA Manifest</th>
+                <th style={{ textAlign: 'center', padding: '6px 6px', color: 'var(--color-secondary)' }}>EXIF/XMP</th>
+                <th style={{ textAlign: 'center', padding: '6px 6px', color: 'var(--color-tertiary)' }}>Soft Binding</th>
+                <th style={{ textAlign: 'center', padding: '6px 6px', color: '#f59e0b' }}>SynthID</th>
+                <th style={{ textAlign: 'center', padding: '6px 6px', color: '#f87171' }}>Stable Sig</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ['Screenshot', '❌', '❌', '⚠️ Possible', '✅ Likely', '❌'],
+                ['Re-encode (JPEG)', '❌', '❌', '⚠️ Possible', '✅ Likely', '❌'],
+                ['Crop + Re-save', '❌', '❌', '⚠️ Possible', '✅ Likely', '❌'],
+                ['Social Upload', '❌', '❌', '❌', '⚠️ May survive', '❌'],
+                ['Print → Scan', '❌', '❌', '❌', '❌', '❌'],
+                ['Email Attachment', '✅', '✅', '✅', '✅', '✅'],
+                ['File Transfer', '✅', '✅', '✅', '✅', '✅'],
+                ['Cloud Backup', '✅', '✅', '✅', '✅', '✅'],
+                ['Lossless Metadata Strip', '❌', '❌', '✅', '✅', '✅'],
+                ['Format Convert (PNG→JPEG)', '❌', '❌', '⚠️ Possible', '✅ Likely', '❌'],
+              ].map(([op, c2pa, exif, soft, synth, stable]) => (
+                <tr key={op} style={{ borderBottom: '1px solid rgba(61,73,76,0.15)' }}>
+                  <td style={{ padding: '5px 8px', color: 'var(--color-on-surface)', whiteSpace: 'nowrap' }}>{op}</td>
+                  <td style={{ textAlign: 'center', padding: '5px 6px' }}>{c2pa}</td>
+                  <td style={{ textAlign: 'center', padding: '5px 6px' }}>{exif}</td>
+                  <td style={{ textAlign: 'center', padding: '5px 6px' }}>{soft}</td>
+                  <td style={{ textAlign: 'center', padding: '5px 6px' }}>{synth}</td>
+                  <td style={{ textAlign: 'center', padding: '5px 6px' }}>{stable}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <canvas ref={canvasRef} className="visually-hidden" />
     </main>
   );
