@@ -460,6 +460,9 @@ import { SimulatorView } from './features/simulator/SimulatorView';
 import { PlaygroundView } from './features/playground/PlaygroundView';
 import { TextView } from './features/text/TextView';
 import { ProvenanceGraph } from './features/provenance/ProvenanceGraph';
+import { buildEvidenceSummary, groupByPerspective, explainValidationState, explainFinding } from './lib/verification-evidence';
+import { PERSPECTIVE_LABELS, PERSPECTIVE_COLORS, STATUS_LABELS as EVIDENCE_STATUS_LABELS, STATUS_COLORS as EVIDENCE_STATUS_COLORS, STATUS_EMOJI as EVIDENCE_STATUS_EMOJI, CATEGORY_LABELS } from './lib/evidence';
+import type { Perspective, Finding, EvidenceStatus } from './lib/evidence';
 
 /* ── Mode-aware NAV_ITEMS ──────────────────────────────────────── */
 
@@ -1674,6 +1677,241 @@ export default function App() {
                     </div>
                   </div>
                 )}
+
+                {/* ── Bilateral Evidence Panel ─────────────────────── */}
+                {result && (() => {
+                  const evidenceSummary = buildEvidenceSummary(result);
+                  const perspectiveGroups = groupByPerspective(evidenceSummary.findings);
+                  const [expandedWhy, setExpandedWhy] = useState<string | null>(null);
+
+                  const PERSPECTIVE_BADGE_STYLES: Record<Perspective, { bg: string; border: string; text: string }> = {
+                    manifest: { bg: 'rgba(76, 215, 246, 0.10)', border: 'rgba(76, 215, 246, 0.30)', text: 'var(--color-primary)' },
+                    independent: { bg: 'rgba(78, 222, 163, 0.10)', border: 'rgba(78, 222, 163, 0.30)', text: 'var(--color-tertiary)' },
+                    user: { bg: 'rgba(168, 85, 247, 0.10)', border: 'rgba(168, 85, 247, 0.30)', text: '#a855f7' },
+                  };
+
+                  const STATUS_BADGE_STYLES: Record<EvidenceStatus, { bg: string; border: string; text: string }> = {
+                    verified: { bg: 'rgba(78,222,163,0.12)', border: 'rgba(78,222,163,0.3)', text: 'var(--color-tertiary)' },
+                    supported: { bg: 'rgba(76,215,246,0.12)', border: 'rgba(76,215,246,0.3)', text: 'var(--color-primary)' },
+                    claimed: { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)', text: '#f59e0b' },
+                    unknown: { bg: 'rgba(134,147,151,0.12)', border: 'rgba(134,147,151,0.3)', text: 'var(--color-muted)' },
+                    contradicted: { bg: 'rgba(244,63,94,0.12)', border: 'rgba(244,63,94,0.3)', text: 'var(--color-error)' },
+                    rejected: { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.3)', text: '#f59e0b' },
+                    modified: { bg: 'rgba(168,85,247,0.12)', border: 'rgba(168,85,247,0.3)', text: '#a855f7' },
+                    stripped: { bg: 'rgba(244,63,94,0.12)', border: 'rgba(244,63,94,0.3)', text: '#f43f5e' },
+                  };
+
+                  return (
+                    <div className="panel" style={{ padding: 16 }}>
+                      <div className="section-heading">
+                        <h2>Bilateral Evidence Summary</h2>
+                        <span className="badge" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: evidenceSummary.overallStatus === 'verified' ? 'var(--color-tertiary)' : evidenceSummary.overallStatus === 'contradicted' ? 'var(--color-error)' : 'var(--color-muted)' }} />
+                          {EVIDENCE_STATUS_LABELS[evidenceSummary.overallStatus]}
+                        </span>
+                      </div>
+
+                      {/* Overall status with Why? button */}
+                      <div style={{
+                        padding: '10px 14px', borderRadius: 8, marginBottom: 14,
+                        background: 'var(--color-surface)',
+                        border: '1px solid rgba(61,73,76,0.2)',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                      }}>
+                        <span style={{ fontSize: 16 }}>{EVIDENCE_STATUS_EMOJI[evidenceSummary.overallStatus]}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-on-surface)' }}>
+                            Overall: {EVIDENCE_STATUS_LABELS[evidenceSummary.overallStatus]}
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--color-muted)', marginTop: 2 }}>
+                            {evidenceSummary.findings.length} finding{evidenceSummary.findings.length === 1 ? '' : 's'} across {perspectiveGroups.size} perspective{perspectiveGroups.size === 1 ? '' : 's'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedWhy(expandedWhy === 'overall' ? null : 'overall')}
+                          style={{
+                            fontSize: 10, fontWeight: 600, padding: '4px 10px', borderRadius: 6,
+                            background: expandedWhy === 'overall' ? 'rgba(76,215,246,0.15)' : 'rgba(76,215,246,0.08)',
+                            border: '1px solid rgba(76,215,246,0.25)',
+                            color: 'var(--color-primary)', cursor: 'pointer',
+                            fontFamily: "'JetBrains Mono', monospace",
+                          }}
+                        >
+                          Why?
+                        </button>
+                      </div>
+
+                      {/* Expanded Why? for overall status */}
+                      {expandedWhy === 'overall' && (
+                        <div style={{
+                          padding: '10px 14px', borderRadius: 8, marginBottom: 14,
+                          background: 'rgba(76,215,246,0.04)',
+                          border: '1px solid rgba(76,215,246,0.12)',
+                          fontSize: 11, color: 'var(--color-on-surface-dim)',
+                          lineHeight: 1.5, whiteSpace: 'pre-line',
+                        }}>
+                          {explainValidationState(result.validationState)}
+                        </div>
+                      )}
+
+                      {/* Findings grouped by perspective */}
+                      {Array.from(perspectiveGroups.entries()).map(([perspective, findings]) => (
+                        <div key={perspective} style={{ marginBottom: 14 }}>
+                          {/* Perspective header with badge */}
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
+                          }}>
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                              fontFamily: "'JetBrains Mono', monospace",
+                              padding: '3px 8px', borderRadius: 4,
+                              background: PERSPECTIVE_BADGE_STYLES[perspective].bg,
+                              border: `1px solid ${PERSPECTIVE_BADGE_STYLES[perspective].border}`,
+                              color: PERSPECTIVE_BADGE_STYLES[perspective].text,
+                            }}>
+                              {PERSPECTIVE_LABELS[perspective]}
+                            </span>
+                            <span style={{
+                              fontSize: 9, color: 'var(--color-muted)',
+                              fontFamily: "'JetBrains Mono', monospace",
+                            }}>
+                              {findings.length} finding{findings.length === 1 ? '' : 's'}
+                            </span>
+                          </div>
+
+                          {/* Individual findings */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {findings.map((f) => {
+                              const isExpanded = expandedWhy === f.id;
+                              const sBadge = STATUS_BADGE_STYLES[f.status];
+                              return (
+                                <div key={f.id} style={{
+                                  padding: '10px 12px', borderRadius: 8,
+                                  background: 'var(--color-surface-lowest)',
+                                  border: '1px solid var(--color-outline-variant)',
+                                }}>
+                                  {/* Finding header */}
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                                       <span style={{ fontSize: 12 }}>{EVIDENCE_STATUS_EMOJI[f.status]}</span>
+                                      <span style={{
+                                        fontSize: 11, fontWeight: 600, color: 'var(--color-on-surface)',
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                      }}>
+                                        {f.label}
+                                      </span>
+                                      <span style={{
+                                        fontSize: 8, padding: '1px 5px', borderRadius: 3,
+                                        background: 'rgba(61,73,76,0.08)',
+                                        color: 'var(--color-muted)',
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        textTransform: 'uppercase', flexShrink: 0,
+                                      }}>
+                                        {CATEGORY_LABELS[f.category]}
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                      <span style={{
+                                        fontSize: 9, padding: '2px 6px', borderRadius: 4,
+                                        background: sBadge.bg, border: `1px solid ${sBadge.border}`,
+                                        color: sBadge.text, fontWeight: 600,
+                                        fontFamily: "'JetBrains Mono', monospace",
+                                        textTransform: 'uppercase',
+                                      }}>
+                                        {EVIDENCE_STATUS_LABELS[f.status]}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setExpandedWhy(isExpanded ? null : f.id)}
+                                        style={{
+                                          fontSize: 9, fontWeight: 600, padding: '3px 8px', borderRadius: 4,
+                                          background: isExpanded ? 'rgba(76,215,246,0.15)' : 'rgba(76,215,246,0.06)',
+                                          border: '1px solid rgba(76,215,246,0.20)',
+                                          color: 'var(--color-primary)', cursor: 'pointer',
+                                          fontFamily: "'JetBrains Mono', monospace",
+                                        }}
+                                      >
+                                        Why?
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Description */}
+                                  <p style={{
+                                    fontSize: 10, color: 'var(--color-on-surface-dim)',
+                                    lineHeight: 1.4, margin: '6px 0 0',
+                                  }}>
+                                    {f.description}
+                                  </p>
+
+                                  {/* Evidence refs */}
+                                  {f.evidence.length > 0 && (
+                                    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                      {f.evidence.slice(0, 3).map((e, i) => (
+                                        <div key={i} style={{
+                                          fontSize: 9, color: 'var(--color-muted)',
+                                          fontFamily: "'JetBrains Mono', monospace",
+                                          display: 'flex', alignItems: 'center', gap: 4,
+                                        }}>
+                                          <span style={{ color: 'var(--color-outline)' }}>›</span>
+                                          <span>{e.source}</span>
+                                          {e.detail && <span style={{ color: 'var(--color-on-surface-dim)' }}>— {e.detail}</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {/* Expanded Why? explanation */}
+                                  {isExpanded && (
+                                    <div style={{
+                                      marginTop: 8, padding: '8px 10px', borderRadius: 6,
+                                      background: 'rgba(76,215,246,0.04)',
+                                      border: '1px solid rgba(76,215,246,0.12)',
+                                      fontSize: 10, color: 'var(--color-on-surface-dim)',
+                                      fontFamily: "'JetBrains Mono', monospace",
+                                      lineHeight: 1.6, whiteSpace: 'pre-line',
+                                    }}>
+                                      {explainFinding(f)}
+                                      {f.counterEvidence && (
+                                        <div style={{
+                                          marginTop: 6, padding: '6px 8px', borderRadius: 4,
+                                          background: 'rgba(245,158,11,0.06)',
+                                          border: '1px solid rgba(245,158,11,0.15)',
+                                          fontSize: 9, color: '#f59e0b',
+                                        }}>
+                                          <span style={{ fontWeight: 600 }}>Counter-evidence: </span>{f.counterEvidence}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Summary footer */}
+                      <div style={{
+                        marginTop: 4, padding: '8px 12px', borderRadius: 6,
+                        background: 'var(--color-surface)',
+                        border: '1px solid rgba(61,73,76,0.15)',
+                        display: 'flex', gap: 12, flexWrap: 'wrap',
+                        fontSize: 9, color: 'var(--color-muted)',
+                        fontFamily: "'JetBrains Mono', monospace",
+                      }}>
+                        <span>Analyzed: {new Date(evidenceSummary.analyzedAt).toLocaleTimeString()}</span>
+                        <span>•</span>
+                        <span>{evidenceSummary.findings.length} total findings</span>
+                        <span>•</span>
+                        <span>SHA-256: {evidenceSummary.fileSha256.slice(0, 12)}…</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
