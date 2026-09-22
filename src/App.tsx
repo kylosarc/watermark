@@ -835,6 +835,7 @@ export default function App() {
   const [view, setView] = useState<View>(() => (getStoredLastView() as View) || 'inspector');
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('overview');
   const [result, setResult] = useState<VerificationResult | null>(() => getStoredResult());
+  const [expandedWhy, setExpandedWhy] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -1682,7 +1683,6 @@ export default function App() {
                 {result && (() => {
                   const evidenceSummary = buildEvidenceSummary(result);
                   const perspectiveGroups = groupByPerspective(evidenceSummary.findings);
-                  const [expandedWhy, setExpandedWhy] = useState<string | null>(null);
 
                   const PERSPECTIVE_BADGE_STYLES: Record<Perspective, { bg: string; border: string; text: string }> = {
                     manifest: { bg: 'rgba(76, 215, 246, 0.10)', border: 'rgba(76, 215, 246, 0.30)', text: 'var(--color-primary)' },
