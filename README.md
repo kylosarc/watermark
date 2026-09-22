@@ -176,45 +176,32 @@ npm test
 
 ## Architecture
 
-
-
-                         ┌──────────────────┐
-                         │      FILE        │
-                         │ image/video/etc. │
-                         └────────┬─────────┘
-                                  │
-             ┌────────────────────┼────────────────────┐
-             │                    │                    │
-             ▼                    ▼                    ▼
-       ┌───────────┐       ┌────────────┐       ┌────────────┐
-       │   C2PA    │       │  Metadata  │       │   Binary   │
-       │  Manifest │       │ EXIF / XMP │       │  Structure │
-       └─────┬─────┘       └──────┬─────┘       └─────┬──────┘
-             │                    │                    │
-             └────────────────────┼────────────────────┘
-                                  ▼
-                       ┌────────────────────┐
-                       │     WATERMARK      │
-                       │ Evidence Workspace │
-                       └─────────┬──────────┘
-                                 │
-              ┌──────────────────┼─────────────────┐
-              ▼                  ▼                 ▼
-        Verification       Provenance Diff    Transformation
-        & Trust             & Evidence        Testing
-
-
-- `src/App.tsx` — all views and components (~6300 lines)
-- `src/lib/c2pa.ts` — C2PA SDK wrapper (v0.15.1 `Reader.fromBlob()` API)
-- `src/lib/verification.ts` — manifest summarization, AI detection, soft binding, watermark claims
-- `src/lib/metadata.ts` — EXIF extraction, binary analysis, entropy heatmap, sanitizer, editor, piexifjs/picscrub
-- `src/lib/harper.ts` — grammar checker (WASM, lazy-loaded)
-- `src/lib/winkNlp.ts` — NLP analysis (sentiment, POS, entities)
-- `src/lib/transform.ts` — text stripping, PII redaction, unsloping, homoglyph detection
-- `src/lib/extract.ts` — text extraction from PDF, PPTX, DOCX (with jschardet encoding detection)
-- `src/lib/file.ts` — hashing (SHA-256, SHA-1, MD5), format detection
-- `src/lib/persist.ts` — localStorage + IndexedDB persistence
-- `src/lib/audit.ts` — session audit trail
+```
+src/
+├── App.tsx              ~1900 lines — Main app, routing, header/footer
+├── main.tsx             React entry + ErrorBoundary
+├── styles.css           CSS variables, dark/light theme
+├── lib/
+│   ├── c2pa.ts          C2PA SDK wrapper (v0.15.1 Reader.fromBlob API)
+│   ├── verification.ts  Manifest summarization, AI detection, soft binding
+│   ├── evidence.ts      EvidenceStatus, Finding, Perspective domain model
+│   ├── metadata.ts      EXIF extraction, binary analysis, entropy heatmap, sanitizer
+│   ├── harper.ts        Grammar checker (WASM, lazy-loaded)
+│   ├── winkNlp.ts       NLP analysis (sentiment, POS, entities)
+│   ├── transform.ts     Text stripping, PII redaction, unsloping, homoglyphs
+│   ├── extract.ts       Text extraction (PDF, PPTX, DOCX, jschardet)
+│   ├── file.ts          Hashing (SHA-256, SHA-1, MD5), format detection
+│   ├── persist.ts       localStorage + IndexedDB persistence
+│   ├── audit.ts         Session audit trail
+│   └── types.ts         Shared TypeScript types
+└── features/
+    ├── inspector/       BinaryInspector, HashCalculator, MetadataTab, ManifestCard
+    ├── provenance/      DiffView, LineageView, ProvenanceGraph, EvidencePanel
+    ├── simulator/       SimulatorView (What Would Break? + Survival Matrix)
+    ├── playground/      PlaygroundView (Trust Policy rules)
+    ├── text/            TextView, TextDetailPanel, NlpDetailPanel, TextTransformPanel
+    └── batch/           BatchView (multi-file verification)
+```
 
 ## Important notes
 
