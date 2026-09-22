@@ -3290,6 +3290,129 @@ pre {
   border: 1px solid rgba(61, 73, 76, 0.3);
 }
 
+/* ── Evidence Why? Toggle ──────────────────────────────────── */
+
+.sim-why-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border: none;
+  background: rgba(61, 73, 76, 0.15);
+  border-radius: 4px;
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: var(--color-outline);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  font-family: inherit;
+}
+
+.sim-why-toggle:hover {
+  background: rgba(61, 73, 76, 0.25);
+  color: var(--color-on-surface);
+}
+
+.sim-why-panel {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(30, 35, 38, 0.6);
+  border: 1px solid rgba(61, 73, 76, 0.25);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.sim-why-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.sim-evidence-status {
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sim-why-perspective {
+  font-size: 0.5625rem;
+  color: var(--color-outline);
+  font-style: italic;
+}
+
+.sim-why-text {
+  color: var(--color-on-surface-dim);
+  margin: 0 0 8px 0;
+}
+
+.sim-why-explainer,
+.sim-why-counter {
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+.sim-why-explainer {
+  background: rgba(78, 222, 163, 0.06);
+  border-left: 2px solid var(--color-tertiary);
+}
+
+.sim-why-counter {
+  background: rgba(244, 63, 94, 0.06);
+  border-left: 2px solid #f43f5e;
+}
+
+.sim-why-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.5625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-outline);
+  margin-bottom: 2px;
+}
+
+.sim-why-explainer p,
+.sim-why-counter p {
+  margin: 0;
+  color: var(--color-on-surface-dim);
+}
+
+/* ── Evidence Summary Stat ─────────────────────────────────── */
+
+.sim-summary-stat.evidence-stat {
+  border-left: 1px solid rgba(61, 73, 76, 0.3);
+  padding-left: 12px;
+  margin-left: 4px;
+  gap: 6px;
+  align-items: center;
+}
+
+.evidence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.evidence-dot.verified {
+  background: var(--color-tertiary);
+}
+
+.evidence-dot.contradicted {
+  background: #f43f5e;
+}
+
+.evidence-sep {
+  color: var(--color-outline);
+  margin: 0 2px;
+}
+
 @media (max-width: 768px) {
   .sim-grid {
     grid-template-columns: 1fr;

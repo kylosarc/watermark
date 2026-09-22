@@ -371,11 +371,11 @@ export function BatchView({ showToast }: { showToast: (msg: string) => void }) {
                     </td>
                     <td>
                       {r?.validationState === 'Trusted' ? (
-                        <span className="batch-badge success">Trusted</span>
+                        <span className="batch-badge success" title="Cryptographically verified with trusted issuer">Trusted</span>
                       ) : r?.validationState === 'Valid' ? (
-                        <span className="batch-badge info">Valid</span>
+                        <span className="batch-badge info" title="Valid but issuer not in trust list">Valid</span>
                       ) : r?.validationState === 'Invalid' ? (
-                        <span className="batch-badge danger">Invalid</span>
+                        <span className="batch-badge danger" title="Signature or content binding failed">Invalid</span>
                       ) : (
                         <span className="batch-badge pending">—</span>
                       )}

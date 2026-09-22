@@ -8,9 +8,19 @@ import {
   RefreshCw,
   Trash2,
   Upload,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { verifyFile } from '../../lib/c2pa';
 import { formatBytes } from '../../lib/file';
+import {
+  type Finding,
+  type EvidenceStatus,
+  createFinding,
+  explainFinding,
+  STATUS_LABELS,
+  STATUS_EMOJI,
+} from '../../lib/evidence';
 
 /* ── What Would Break? Simulator View ───────────────────────────── */
 
@@ -192,6 +202,7 @@ interface SimResult {
   status: 'pending' | 'running' | 'passed' | 'failed' | 'error';
   originalState: string;
   newState: string;
+  finding?: Finding;
   error?: string;
 }
 
@@ -200,6 +211,7 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [results, setResults] = useState<SimResult[]>([]);
   const [running, setRunning] = useState(false);
+  const [expandedWhy, setExpandedWhy] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -231,6 +243,7 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
     if (!sourceFile || !canvasRef.current) return;
     setRunning(true);
     setResults([]);
+    setExpandedWhy(new Set());
 
     // Verify original first
     let originalState = 'missing';
@@ -258,11 +271,49 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
         const blob = await op.execute(img, canvas, ctx);
         const transformedFile = new File([blob], `transformed.${blob.type.split('/')[1] || 'jpg'}`, { type: blob.type });
         const result = await verifyFile(transformedFile);
-        simResult.status = result.validationState === originalState ? 'passed' : 'failed';
+        const survived = result.validationState === originalState;
+        simResult.status = survived ? 'passed' : 'failed';
         simResult.newState = result.validationState;
+
+        // Create bilateral evidence finding
+        const evidenceStatus: EvidenceStatus = survived ? 'verified' : 'contradicted';
+        simResult.finding = createFinding(
+          `sim-${op.id}`,
+          op.category === 'metadata' ? 'manifest-integrity' : 'content-binding',
+          evidenceStatus,
+          'independent',
+          survived ? 95 : 90,
+          `C2PA manifest after ${op.name}`,
+          survived
+            ? `The C2PA manifest survived ${op.name.toLowerCase()}. The content binding and signature remain intact.`
+            : `The C2PA manifest was broken by ${op.name.toLowerCase()}. The original validation state "${originalState}" no longer holds.`,
+          [
+            { source: 'c2pa-binding', detail: 'content-hash comparison' },
+            { source: 'c2pa-signature', detail: 'post-transform verification' },
+          ],
+          survived
+            ? `${op.name} preserves the C2PA manifest. The file's provenance chain remains verifiable.`
+            : `${op.name} invalidates the C2PA manifest. The content hash no longer matches what the manifest binds to.`,
+          survived
+            ? 'What would break this: Any re-encoding that modifies pixel data (lossy compression, filters, crops) would invalidate the manifest.'
+            : 'What would preserve this: Only byte-preserving operations (file copy, metadata-only edits) keep C2PA intact.',
+        );
       } catch (err) {
         simResult.status = 'error';
         simResult.error = err instanceof Error ? err.message : 'Unknown error';
+
+        simResult.finding = createFinding(
+          `sim-${op.id}`,
+          'content-binding',
+          'unknown',
+          'independent',
+          0,
+          `C2PA manifest after ${op.name}`,
+          `Could not verify C2PA manifest after ${op.name.toLowerCase()}: ${simResult.error}`,
+          [{ source: 'analysis', detail: 'execution error' }],
+          `The ${op.name.toLowerCase()} operation failed, so we cannot determine whether C2PA survived.`,
+          'What would contradict this: Re-running the operation successfully would provide a definitive answer.',
+        );
       }
 
       newResults.push(simResult);
@@ -279,7 +330,17 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
     setSourceFile(null);
     setPreviewUrl(null);
     setResults([]);
+    setExpandedWhy(new Set());
     showToast('Simulator cleared');
+  }
+
+  function toggleWhy(id: string) {
+    setExpandedWhy((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   function exportReport() {
@@ -289,6 +350,8 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
       status: r.status,
       originalState: r.originalState,
       newState: r.newState,
+      evidenceStatus: r.finding?.status ?? '',
+      evidenceLabel: r.finding?.label ?? '',
       error: r.error || '',
     }));
     const json = JSON.stringify(rows, null, 2);
@@ -305,6 +368,8 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
   const passedCount = results.filter((r) => r.status === 'passed').length;
   const failedCount = results.filter((r) => r.status === 'failed').length;
   const errorCount = results.filter((r) => r.status === 'error').length;
+  const verifiedCount = results.filter((r) => r.finding?.status === 'verified').length;
+  const contradictedCount = results.filter((r) => r.finding?.status === 'contradicted').length;
 
   const categories = ['format', 'resize', 'transform'] as const;
   const categoryLabels: Record<string, string> = { format: 'Format Conversion', resize: 'Resize', transform: 'Transform' };
@@ -397,6 +462,15 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
               <span>Errors</span>
             </div>
           )}
+          <div className="sim-summary-stat evidence-stat">
+            <span className="evidence-dot verified" />
+            <strong>{verifiedCount}</strong>
+            <span>Verified</span>
+            <span className="evidence-sep">|</span>
+            <span className="evidence-dot contradicted" />
+            <strong>{contradictedCount}</strong>
+            <span>Contradicted</span>
+          </div>
         </div>
       )}
 
@@ -422,6 +496,46 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
                       <div className="sim-card-info">
                         <span className="sim-card-name">{r.operation.name}</span>
                         <span className="sim-card-desc">{r.operation.description}</span>
+                        {r.finding && (
+                          <button
+                            className="sim-why-toggle"
+                            type="button"
+                            onClick={() => toggleWhy(r.operation.id)}
+                          >
+                            {expandedWhy.has(r.operation.id) ? (
+                              <ChevronDown size={12} />
+                            ) : (
+                              <ChevronRight size={12} />
+                            )}
+                            <span>Why?</span>
+                          </button>
+                        )}
+                        {r.finding && expandedWhy.has(r.operation.id) && (
+                          <div className="sim-why-panel">
+                            <div className="sim-why-header">
+                              <span
+                                className="sim-evidence-status"
+                                style={{ color: STATUS_EMOJI[r.finding.status] === '✓' ? 'var(--color-tertiary)' : '#f43f5e' }}
+                              >
+                                {STATUS_EMOJI[r.finding.status]} {STATUS_LABELS[r.finding.status]}
+                              </span>
+                              <span className="sim-why-perspective">Independent Verification</span>
+                            </div>
+                            <p className="sim-why-text">{r.finding.description}</p>
+                            {r.finding.explainer && (
+                              <div className="sim-why-explainer">
+                                <span className="sim-why-label">What happened:</span>
+                                <p>{r.finding.explainer}</p>
+                              </div>
+                            )}
+                            {r.finding.counterEvidence && (
+                              <div className="sim-why-counter">
+                                <span className="sim-why-label">Falsification:</span>
+                                <p>{r.finding.counterEvidence}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="sim-card-verdict">
                         {r.status === 'passed' && <span className="sim-badge preserved">Preserved</span>}
@@ -450,6 +564,8 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
               status: r.status,
               originalState: r.originalState,
               newState: r.newState,
+              evidenceStatus: r.finding?.status ?? '',
+              evidenceLabel: r.finding?.label ?? '',
             }));
             const json = JSON.stringify(data, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
@@ -463,8 +579,8 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
             <Download size={14} /> JSON
           </button>
           <button className="action-tactile button-ghost" type="button" onClick={() => {
-            const headers = ['Operation', 'Category', 'Description', 'Status', 'Original State', 'New State'];
-            const rows = results.map(r => [r.operation.name, r.operation.category, r.operation.description, r.status, r.originalState, r.newState]);
+            const headers = ['Operation', 'Category', 'Description', 'Status', 'Original State', 'New State', 'Evidence Status'];
+            const rows = results.map(r => [r.operation.name, r.operation.category, r.operation.description, r.status, r.originalState, r.newState, r.finding?.status ?? '']);
             const csv = [headers, ...rows].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
