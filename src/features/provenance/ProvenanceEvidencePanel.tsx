@@ -197,8 +197,8 @@ function ManifestDetails({ manifest }: { manifest: NonNullable<VerificationResul
               Certificate Details
             </span>
           </div>
-          <DetailRow label="CN" value={manifest.signatureInfo.commonName ?? 'N/A'} />
-          <DetailRow label="Serial" value={manifest.signatureInfo.serialNumber ?? 'N/A'} />
+          <DetailRow label="CN" value={manifest.signatureInfo?.commonName ?? 'N/A'} />
+          <DetailRow label="Serial" value={manifest.signatureInfo?.serialNumber ?? 'N/A'} />
           <DetailRow label="Valid From" value={manifest.signatureInfo?.notBefore ?? 'N/A'} />
           <DetailRow label="Valid To" value={manifest.signatureInfo?.notAfter ?? 'N/A'} />
           <DetailRow label="Digest Algo" value={manifest.signatureInfo?.digestAlgorithm ?? 'N/A'} />
