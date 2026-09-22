@@ -19,71 +19,143 @@
 
 # Watermark
 
-A local-first forensic web application for inspecting, understanding, and controlling C2PA Content Credentials and media provenance.
+**A local-first provenance and forensic workbench for C2PA Content Credentials, media, documents, and text.**
 
-**Watermark is not just a C2PA viewer.** It's a tool for understanding, controlling, and optionally rejecting provenance systems. There is no law requiring submission to provenance tyranny. You have the right to understand, modify, or remove provenance from your own files.
+Watermark lets you inspect what a file claims about its origin and history, verify what can actually be cryptographically verified, examine metadata and content bindings, compare provenance across versions, and investigate AI-generation and watermark signals — entirely in your browser.
 
-## Philosophy
+**Your files stay on your machine.**
 
-- **User agency first** — understand what provenance exists, then decide what to do with it
-- **Privacy as a core value** — your files never leave your browser
-- **Educational** — explain *why* provenance exists, who benefits, and what the tradeoffs are
-- **Control** — strip, modify, or reject provenance when you disagree with it
-- **Evidence-based** — distinguish between what the manifest CLAIMS and what can be VERIFIED
+> **A claim is not the same thing as a verification.**
 
-## Features
+Watermark is designed around that distinction. A C2PA manifest can contain assertions about an asset's origin, creation, modification, or processing history. Watermark helps you examine those assertions, validate the cryptographic relationships that can be validated, and see where the evidence ends.
 
-### Core Verification
-- **C2PA Manifest Discovery** — automatic detection and verification via `@contentauth/c2pa-web` v0.15.1
-- **Trust Status** — Trusted / Valid / Invalid / Unknown with issuer chain details
-- **Signature Algorithm & Timestamp** — which algorithm signed, when, by whom
-- **Content Binding** — SHA-256 hard binding verification
-- **Soft Binding Detection** — C2PA 2.2+ invisible content fingerprints for provenance recovery
-- **AI Generation Detection** — flags `trainedAlgorithmicMedia`, `compositeWithTrainedAlgorithmicMedia`, etc.
-- **Watermark / SynthID Claims** — surfaces embedded watermark assertions from manifests
+## Why Watermark?
 
-### Inspector Views
-- **Manifest Overview** — identity, cryptographic checks, trust summary, verification summary card (screenshot-friendly)
-- **Assertions & Ingredients** — searchable assertion list with category badges (binding, signature, provenance, technical)
-- **Cryptography** — signature validation, certificate chain status
-- **Raw JSON** — full C2PA manifest dump for debugging
-- **File Metadata** — EXIF, camera info, GPS, copyright, AI detection, plus tabs for:
-  - **Binary Inspector** — hex view + structure tree + entropy heatmap
-  - **Hash Calculator** — SHA-256, SHA-1, MD5 with copy buttons
-  - **Metadata Editor** — edit EXIF fields in-place
-  - **Metadata Sanitizer** — strip metadata by preset (minimal, social, professional, forensic, privacy)
+Digital provenance systems are becoming an increasingly important part of how digital content is identified, attributed, and trusted. But provenance is not a binary question of "authentic" or "fake."
 
-### Text Analysis
-- **Text Analysis** — word count, sentence count, AI-confidence scoring, vocabulary richness, burstiness
-- **NLP Analysis** — sentiment, POS distribution, named entities, writing style metrics (all in unified table)
-- **Grammar Checker** — Harper.js WASM-based grammar and spelling suggestions
-- **Text Transformer** — strip PII, HTML, markdown, normalize whitespace, detect homoglyphs
-- **Unsloper** — remove AI-generated writing patterns ("In today's fast-paced world...")
-- **Clipboard Monitor** — auto-verifies images pasted via Ctrl+V
+A useful inspection tool needs to let people see:
 
-### Batch & Comparison
-- **Batch Report** — verify multiple files at once, CSV/JSON export
-- **Provenance Diff** — side-by-side comparison of two manifest versions
-- **Evidence Pack** — structured JSON export with full verification data
+* what a file contains;
+* what a C2PA manifest claims;
+* which signatures and content bindings validate;
+* whether an issuer is trusted;
+* what metadata exists outside the manifest;
+* what provenance relationships exist between assets;
+* what survives common transformations;
+* and what **cannot** be established from the available evidence.
 
-### Simulation & Testing
-- **What Would Break?** — simulate transformations (re-encode, crop, format convert) and check if C2PA survives
-- **What-If Scenario Builder** — 10 real-world scenarios (screenshot, social upload, email, etc.)
-- **Watermark Survival Matrix** — which operations preserve/destroy which watermark types (C2PA, EXIF, Soft Binding, SynthID, Stable Signature)
-- **Trust Policy Playground** — build custom policies (require assertions, reject algorithms, trust levels)
+Watermark puts those questions into a single local-first workspace.
 
-### Editing
-- **Edit with Provenance** — canvas-based crop with before/after SHA-256 comparison, privacy crop option
-- **Trust Report** — one-click self-contained HTML report for sharing with clients
-- **Provenance-aware image editing** — warns when operations will invalidate content binding
 
-### Cross-Cutting
-- **Dark/Light Theme** — toggle in footer, persists to localStorage
-- **Keyboard Shortcuts** — `?` cheat sheet, `Ctrl+Shift+C` copy hash, arrows navigate
-- **Audit Trail** — timestamped log of all actions, exportable as JSON
-- **Cross-Tab Persistence** — files stored in IndexedDB, survive tab switches
-- **Entropy Heatmap** — color-coded byte-range visualization in binary inspector
-- **Video Poster Frames** — auto-extracts thumbnail from video files
+## Verification Boundaries
+
+Watermark deliberately distinguishes **claims, cryptographic verification, and truth**.
+
+A successful C2PA verification can establish that relevant cryptographic relationships are intact and, depending on the trust result, that the signer chains to a trusted issuer.
+
+It does **not** independently establish that every factual statement in the manifest is true.
+
+Likewise:
+
+* A valid signature does not make every assertion truthful.
+* A trusted issuer does not make every assertion universally correct.
+* A missing C2PA manifest does not prove that content is human-made.
+* The presence of an AI-related provenance assertion does not by itself establish every detail of how content was created.
+* The absence of a detected watermark does not prove that no watermark exists.
+
+Watermark is therefore an **evidence and inspection tool**, not a truth oracle.
+
+
+## What Watermark Can Do
+
+### 🔐 Verify Provenance
+
+* Discover C2PA Content Credentials
+* Validate manifest signatures and content bindings
+* Display issuer and certificate information
+* Distinguish **Trusted**, **Valid**, **Invalid**, and **Unknown**
+* Calculate SHA-256 file digests
+* Inspect hard and soft content bindings
+* Examine complete manifest JSON
+
+### 🔎 Investigate Provenance
+
+* Explore manifests, assertions, and ingredients
+* Examine manifest lineage
+* Compare two provenance states with **Provenance Diff**
+* Generate structured **Evidence Packs**
+* Review file metadata alongside C2PA provenance
+* Inspect binary structure and entropy
+* Examine what survives common transformations
+
+### 💧 Investigate Watermarks & AI Signals
+
+* Surface watermark-related C2PA assertions
+* Surface SynthID-related claims when present
+* Inspect C2PA soft-binding information
+* Identify C2PA AI-generation source-type assertions
+* Compare watermark/provenance survival across transformations
+
+### 🧪 Test & Simulate
+
+* Re-encode media
+* Crop images
+* Convert formats
+* Test whether provenance survives transformations
+* Explore common scenarios such as screenshots, email, and social-media processing
+* Experiment with trust policies
+
+### 🛠️ Work With Your Files
+
+* Edit selected metadata
+* Sanitize metadata
+* Compare hashes before and after changes
+* Perform provenance-aware image editing
+* Extract text from supported documents
+* Analyze and transform text
+* Produce self-contained trust reports
+
+### 🔒 Local-First Privacy
+
+Files are processed in the browser rather than uploaded to a remote analysis service.
+
+Original files are not overwritten. Processing occurs in memory, with local persistence used for application state and audit information.
+
+## What Watermark Does Not Do
+
+Watermark does not attempt to produce a single universal authenticity score.
+
+It does not claim that:
+
+* a file without C2PA provenance is necessarily inauthentic;
+* a file with C2PA provenance is necessarily truthful;
+* a valid signature proves the factual accuracy of every assertion;
+* an AI detector can reliably determine authorship from text alone;
+* the absence of a detected watermark proves that no watermark exists;
+* metadata alone establishes provenance.
+
+Instead, Watermark exposes the available evidence and shows which relationships can actually be verified.
+
+This distinction is fundamental to the project.
+
+
+## What Watermark Does Not Do
+
+Watermark does not attempt to produce a single universal authenticity score.
+
+It does not claim that:
+
+* a file without C2PA provenance is necessarily inauthentic;
+* a file with C2PA provenance is necessarily truthful;
+* a valid signature proves the factual accuracy of every assertion;
+* an AI detector can reliably determine authorship from text alone;
+* the absence of a detected watermark proves that no watermark exists;
+* metadata alone establishes provenance.
+
+Instead, Watermark exposes the available evidence and shows which relationships can actually be verified.
+
+This distinction is fundamental to the project.
+
 
 ## Run locally
 
@@ -103,6 +175,34 @@ npm test
 ```
 
 ## Architecture
+
+
+
+                         ┌──────────────────┐
+                         │      FILE        │
+                         │ image/video/etc. │
+                         └────────┬─────────┘
+                                  │
+             ┌────────────────────┼────────────────────┐
+             │                    │                    │
+             ▼                    ▼                    ▼
+       ┌───────────┐       ┌────────────┐       ┌────────────┐
+       │   C2PA    │       │  Metadata  │       │   Binary   │
+       │  Manifest │       │ EXIF / XMP │       │  Structure │
+       └─────┬─────┘       └──────┬─────┘       └─────┬──────┘
+             │                    │                    │
+             └────────────────────┼────────────────────┘
+                                  ▼
+                       ┌────────────────────┐
+                       │     WATERMARK      │
+                       │ Evidence Workspace │
+                       └─────────┬──────────┘
+                                 │
+              ┌──────────────────┼─────────────────┐
+              ▼                  ▼                 ▼
+        Verification       Provenance Diff    Transformation
+        & Trust             & Evidence        Testing
+
 
 - `src/App.tsx` — all views and components (~6300 lines)
 - `src/lib/c2pa.ts` — C2PA SDK wrapper (v0.15.1 `Reader.fromBlob()` API)

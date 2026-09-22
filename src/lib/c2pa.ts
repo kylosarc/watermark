@@ -15,7 +15,14 @@ function getC2pa(): Promise<Awaited<ReturnType<typeof createC2pa>>> {
 export async function verifyFile(file: File): Promise<VerificationResult> {
   const fileName = file.name || 'Untitled asset';
   const mimeType = file.type || 'application/octet-stream';
-  const sha256 = await sha256Hex(file);
+
+  // Compute hash first — this is our own code, safe
+  let sha256 = '';
+  try {
+    sha256 = await sha256Hex(file);
+  } catch {
+    sha256 = 'hash-unavailable';
+  }
 
   try {
     const sdk = await getC2pa();
@@ -37,6 +44,8 @@ export async function verifyFile(file: File): Promise<VerificationResult> {
       await reader.free().catch(() => undefined);
     }
   } catch (error) {
+    // SDK errors are common with malformed files — return a safe error result
+    console.warn(`[verifyFile] ${fileName}:`, error);
     return errorResult(fileName, file.size, mimeType, sha256, error);
   }
 }
