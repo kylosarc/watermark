@@ -2134,6 +2134,7 @@ const MODE_OPTIONS: { id: AppMode; label: string; icon: string }[] = [
 ];
 
 function Header({ view, setView, mode, setMode }: { view: View; setView: (view: View) => void; mode: AppMode; setMode: (mode: AppMode) => void }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const visibleItems = [...(NAV_ITEMS[mode] ?? []), ...ALWAYS_VISIBLE];
 
   return (
@@ -2142,7 +2143,7 @@ function Header({ view, setView, mode, setMode }: { view: View; setView: (view: 
         <div className="brand-mark"><ShieldCheck size={21} /></div>
         <div className="brand-copy">
           <strong>Watermark</strong>
-          <span>C2PA Engine v2.4 (WASM)</span>
+          <span className="brand-subtitle">C2PA Engine v2.4 (WASM)</span>
         </div>
       </div>
 
@@ -2163,6 +2164,7 @@ function Header({ view, setView, mode, setMode }: { view: View; setView: (view: 
         ))}
       </div>
 
+      {/* Desktop nav */}
       <nav className="desktop-nav" aria-label="Primary navigation">
         {visibleItems.map((item) => {
           const Icon = item.icon;
@@ -2173,14 +2175,30 @@ function Header({ view, setView, mode, setMode }: { view: View; setView: (view: 
           );
         })}
       </nav>
+
       <div className="header-actions">
         <a href="/docs/index.html" target="_blank" rel="noopener" className="help-link" title="Help & Documentation">
           <BookOpen size={17} />
         </a>
-        <div className="account-chip" aria-label="Local session">
-          <UserRound size={17} />
-        </div>
+        {/* Mobile hamburger */}
+        <button className="mobile-menu-btn" type="button" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle menu">
+          {mobileMenuOpen ? <span style={{ fontSize: 18 }}>✕</span> : <span style={{ fontSize: 18 }}>☰</span>}
+        </button>
       </div>
+
+      {/* Mobile nav dropdown */}
+      {mobileMenuOpen && (
+        <nav className="mobile-nav" aria-label="Mobile navigation">
+          {visibleItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button key={item.id} className={view === item.id ? 'active' : ''} type="button" onClick={() => { setView(item.id); setMobileMenuOpen(false); }}>
+                <Icon size={16} /> {item.label}
+              </button>
+            );
+          })}
+        </nav>
+      )}
     </header>
   );
 }
