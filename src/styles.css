@@ -2219,7 +2219,19 @@ pre {
     color: var(--color-primary);
   }
 
-  .brand-subtitle { display: none; }
+  .topbar {
+    height: 48px;
+    padding: 0 10px;
+  }
+
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .brand-copy strong {
+    font-size: 14px;
+  }
 
   .mode-selector {
     margin: 0 8px;
@@ -2237,15 +2249,28 @@ pre {
     font-size: 1rem;
   }
 
-  /* Stack layout on mobile */
+  /* Stack layout on mobile — narrow and tight */
   .main-workspace {
-    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    padding: 8px !important;
+    padding-top: 110px !important;
+    gap: 8px !important;
   }
 
   .asset-column,
   .info-column {
     width: 100% !important;
     min-width: 0 !important;
+  }
+
+  .panel {
+    padding: 10px !important;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 6px;
   }
 
   .file-grid { grid-template-columns: repeat(2, 1fr); }
@@ -2256,11 +2281,30 @@ pre {
 
   .command-bar {
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
+    padding: 8px 10px !important;
   }
 
   .command-actions {
     flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .command-actions button {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .verdict {
+    padding: 12px !important;
+  }
+
+  .verdict-title {
+    font-size: 14px;
+  }
+
+  .inspector-tab-content {
+    padding: 8px !important;
   }
 }
 
