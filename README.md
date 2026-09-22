@@ -66,6 +66,29 @@ Likewise:
 Watermark is therefore an **evidence and inspection tool**, not a truth oracle.
 
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/Watermark-Inspector_Binary.png" alt="Inspector with Binary Analysis" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/images/Watermark-Provenance-Diff.png" alt="Provenance Diff View" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/images/Watermark-Provenance-Lineage.png" alt="Provenance Lineage View" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/images/Watermark-Batch.png" alt="Batch Report View" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/images/Watermark-Break.png" alt="What Would Break? Simulator" width="800">
+</p>
+
+
 ## What Watermark Can Do
 
 ### 🔐 Verify Provenance
