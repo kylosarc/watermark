@@ -82,7 +82,7 @@ import { storeFileBlob, getStoredFileBlob, clearFileBlob } from './lib/persist';
 import { loadAuditTrail, getAuditEntries, clearAuditTrail, exportAuditTrail, auditLog, type AuditEntry } from './lib/audit';
 import './styles.css';
 
-const ACCEPTED_TYPES = 'image/*,video/mp4,video/quicktime,audio/*';
+const ACCEPTED_TYPES = 'image/*,video/mp4,video/quicktime,audio/*,.txt,.md,.json,.html,.csv,.xml,.yaml,.yml,.js,.ts,.py,.go,.rs,.java,.c,.cpp,.h,.rb,.php,.sql,.sh,.css,.docx,.pptx,.pdf';
 const SAMPLE_NAME = 'alpine_dawn_capture_2025.jpg';
 
 type AppMode = 'inspect' | 'provenance' | 'transform';
@@ -1072,6 +1072,27 @@ export default function App() {
     storeFileBlob(file); // persist to IndexedDB for cross-tab access
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
 
+    // Detect text files and route to text analysis
+    const isTextFile = file.type.startsWith('text/') ||
+      /\.(txt|md|json|html|csv|xml|yaml|yml|js|ts|py|go|rs|java|c|cpp|h|rb|php|sql|sh|css|log|ini|cfg)$/i.test(file.name) ||
+      file.type === 'application/json' || file.type === 'application/xml';
+
+    if (isTextFile) {
+      setPreviewUrl(null);
+      try {
+        // Switch to text mode and signal the TextView to process the file
+        setView('text');
+        window.dispatchEvent(new CustomEvent('watermark:text-file-upload', { detail: { file } }));
+        showToast(`Text file "${file.name}" loaded — switching to Text Analysis`);
+      } catch (err) {
+        console.error('Text file handling failed:', err);
+        showToast(`Error: ${err instanceof Error ? err.message : 'Failed to load text file'}`);
+      } finally {
+        setIsVerifying(false);
+      }
+      return;
+    }
+
     let nextPreview: string | null = null;
     if (file.type.startsWith('image/')) {
       nextPreview = window.URL.createObjectURL(file);
@@ -1083,6 +1104,7 @@ export default function App() {
     try {
       const nextResult = await verifyFile(file);
       setResult(nextResult);
+      auditLog('verify', `${file.name} → ${nextResult.validationState}`, 'verify');
       showToast(`Loaded ${file.name}`);
     } catch (err) {
       console.error('Verification failed:', err);

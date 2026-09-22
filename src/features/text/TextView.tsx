@@ -449,7 +449,21 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
     }
     window.addEventListener('watermark:text-navigate', handleNavigate);
     return () => window.removeEventListener('watermark:text-navigate', handleNavigate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, selectedId]);
+
+  // Handle file upload from Inspect mode
+  useEffect(() => {
+    function handleTextFileUpload(e: Event) {
+      const { file } = (e as CustomEvent).detail;
+      if (file instanceof File) {
+        void processFiles([file]);
+      }
+    }
+    window.addEventListener('watermark:text-file-upload', handleTextFileUpload);
+    return () => window.removeEventListener('watermark:text-file-upload', handleTextFileUpload);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectedItem = items.find((it) => it.id === selectedId) ?? null;
 
