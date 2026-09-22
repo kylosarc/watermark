@@ -2557,6 +2557,231 @@ pre {
   opacity: 0.8;
 }
 
+/* Diff Slot Hash & Manifest Info */
+
+.diff-slot-hash {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(61, 73, 76, 0.15);
+  border-radius: 6px;
+}
+
+.diff-slot-hash-label {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  color: var(--color-outline);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.diff-slot-hash-value {
+  font-size: 0.625rem;
+  color: var(--color-on-surface-dim);
+  font-family: 'JetBrains Mono', monospace;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.diff-slot-manifest-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(76, 215, 246, 0.06);
+  border: 1px solid rgba(76, 215, 246, 0.15);
+  border-radius: 6px;
+}
+
+.diff-slot-manifest-count {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.diff-slot-active-manifest {
+  font-size: 0.625rem;
+  color: var(--color-outline);
+  font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+/* Derivation Summary Card */
+
+.diff-summary-card {
+  padding: 20px;
+  background: var(--color-surface-lowest);
+  border: 1px solid rgba(61, 73, 76, 0.3);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 10px;
+}
+
+.diff-summary-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--color-primary);
+}
+
+.diff-summary-card-header h3 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.diff-summary-card-text {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--color-on-surface);
+  margin: 0;
+}
+
+/* Key Findings Panel */
+
+.diff-key-findings {
+  padding: 16px;
+  background: var(--color-surface-lowest);
+  border: 1px solid rgba(61, 73, 76, 0.3);
+  border-radius: 10px;
+}
+
+.diff-key-findings-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--color-outline);
+}
+
+.diff-key-findings-header h3 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.diff-key-findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diff-key-finding {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(61, 73, 76, 0.1);
+  border: 1px solid rgba(61, 73, 76, 0.15);
+}
+
+.diff-key-finding--valid {
+  border-left: 3px solid var(--color-tertiary);
+}
+
+.diff-key-finding--invalid {
+  border-left: 3px solid #f43f5e;
+}
+
+.diff-key-finding--changed {
+  border-left: 3px solid #f59e0b;
+}
+
+.diff-key-finding--unchanged {
+  border-left: 3px solid var(--color-outline);
+}
+
+.diff-key-finding--unknown {
+  border-left: 3px solid var(--color-outline);
+}
+
+.diff-key-finding-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(61, 73, 76, 0.2);
+}
+
+.diff-key-finding--valid .diff-key-finding-icon { color: var(--color-tertiary); }
+.diff-key-finding--invalid .diff-key-finding-icon { color: #f43f5e; }
+.diff-key-finding--changed .diff-key-finding-icon { color: #f59e0b; }
+.diff-key-finding--unchanged .diff-key-finding-icon { color: var(--color-outline); }
+.diff-key-finding--unknown .diff-key-finding-icon { color: var(--color-outline); }
+
+.diff-key-finding-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.diff-key-finding-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.diff-key-finding-detail {
+  font-size: 0.75rem;
+  color: var(--color-on-surface-dim);
+  line-height: 1.4;
+}
+
+.diff-key-finding-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.diff-key-finding-badge--valid {
+  background: rgba(78, 222, 163, 0.15);
+  color: var(--color-tertiary);
+}
+
+.diff-key-finding-badge--invalid {
+  background: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+}
+
+.diff-key-finding-badge--changed {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.diff-key-finding-badge--unchanged {
+  background: rgba(61, 73, 76, 0.2);
+  color: var(--color-outline);
+}
+
+.diff-key-finding-badge--unknown {
+  background: rgba(61, 73, 76, 0.2);
+  color: var(--color-outline);
+}
+
 /* Diff Results */
 
 .diff-results {
@@ -2671,15 +2896,18 @@ pre {
 }
 
 .diff-item.same {
-  background: rgba(61, 73, 76, 0.15);
+  background: rgba(78, 222, 163, 0.08);
+  border-left: 2px solid var(--color-tertiary);
 }
 
 .diff-item.removed {
   background: rgba(244, 63, 94, 0.08);
+  border-left: 2px solid #f43f5e;
 }
 
 .diff-item.added {
-  background: rgba(78, 222, 163, 0.08);
+  background: rgba(76, 215, 246, 0.08);
+  border-left: 2px solid var(--color-primary);
 }
 
 .diff-item-indicator {
@@ -2690,9 +2918,9 @@ pre {
   text-align: center;
 }
 
-.diff-item.same .diff-item-indicator { color: var(--color-outline); }
+.diff-item.same .diff-item-indicator { color: var(--color-tertiary); }
 .diff-item.removed .diff-item-indicator { color: #f43f5e; }
-.diff-item.added .diff-item-indicator { color: var(--color-tertiary); }
+.diff-item.added .diff-item-indicator { color: var(--color-primary); }
 
 .diff-item-label {
   flex: 1;
@@ -2752,6 +2980,18 @@ pre {
 
   .diff-summary {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .diff-key-finding {
+    flex-wrap: wrap;
+  }
+
+  .diff-key-finding-badge {
+    margin-left: auto;
+  }
+
+  .diff-slot-hash-value {
+    font-size: 0.5625rem;
   }
 }
 

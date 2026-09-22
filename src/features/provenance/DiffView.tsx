@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Eye, FileText, GitBranch, Link2, RefreshCw, Shield, ShieldOff, Trash2, Upload } from 'lucide-react';
 import { verifyFile } from '../../lib/c2pa';
 import { errorResult } from '../../lib/verification';
 import { formatBytes } from '../../lib/file';
@@ -38,6 +38,19 @@ interface DiffResult {
   bManifestCount: number;
   aValidationState: string;
   bValidationState: string;
+  aSha256: string;
+  bSha256: string;
+  aActiveManifest: string;
+  bActiveManifest: string;
+  summary: string;
+  keyFindings: KeyFinding[];
+}
+
+interface KeyFinding {
+  icon: 'binding' | 'manifest' | 'metadata' | 'relation' | 'generator';
+  label: string;
+  status: 'valid' | 'invalid' | 'changed' | 'unchanged' | 'unknown';
+  detail: string;
 }
 
 function computeDiff(a: VerificationResult, b: VerificationResult): DiffResult {
@@ -81,6 +94,12 @@ function computeDiff(a: VerificationResult, b: VerificationResult): DiffResult {
 
   const distance = Math.min(100, Math.round(assertionScore + ingredientScore + bindingScore + generatorScore));
 
+  // Generate plain-English summary
+  const summary = generateSummary(a, b, assertionDiff, ingredientDiff, bindingHolds, distance);
+
+  // Generate key findings
+  const keyFindings = generateKeyFindings(a, b, assertionDiff, ingredientDiff, bindingHolds, aManifest, bManifest);
+
   return {
     assertionDiff,
     ingredientDiff,
@@ -90,7 +109,148 @@ function computeDiff(a: VerificationResult, b: VerificationResult): DiffResult {
     bManifestCount: b.manifestCount,
     aValidationState: a.validationState,
     bValidationState: b.validationState,
+    aSha256: a.sha256,
+    bSha256: b.sha256,
+    aActiveManifest: a.activeManifest ?? aManifest?.label ?? 'None',
+    bActiveManifest: b.activeManifest ?? bManifest?.label ?? 'None',
+    summary,
+    keyFindings,
   };
+}
+
+function generateSummary(
+  a: VerificationResult,
+  b: VerificationResult,
+  assertionDiff: DiffAssertion[],
+  ingredientDiff: DiffIngredient[],
+  bindingHolds: boolean,
+  distance: number,
+): string {
+  const parts: string[] = [];
+
+  // Relationship assessment
+  if (distance <= 10) {
+    parts.push('These files appear to be identical in provenance.');
+  } else if (distance <= 25) {
+    parts.push('File B appears closely related to File A with minor provenance differences.');
+  } else if (distance <= 50) {
+    parts.push('File B appears to be derived from File A with moderate provenance changes.');
+  } else if (distance <= 75) {
+    parts.push('File B shows significant provenance divergence from File A.');
+  } else {
+    parts.push('File B has a substantially different provenance from File A.');
+  }
+
+  // Assertion changes
+  const removed = assertionDiff.filter((d) => d.inA && !d.inB);
+  const added = assertionDiff.filter((d) => !d.inA && d.inB);
+  if (removed.length > 0) {
+    const labels = removed.map((d) => d.label).join(', ');
+    parts.push(`Metadata removed: ${labels}.`);
+  }
+  if (added.length > 0) {
+    const labels = added.map((d) => d.label).join(', ');
+    parts.push(`New metadata added: ${labels}.`);
+  }
+
+  // Ingredient changes
+  const removedIngredients = ingredientDiff.filter((d) => d.inA && !d.inB);
+  const addedIngredients = ingredientDiff.filter((d) => !d.inA && d.inB);
+  if (removedIngredients.length > 0) {
+    parts.push('Some source ingredients were removed from the ingredient chain.');
+  }
+  if (addedIngredients.length > 0) {
+    parts.push('New ingredients were added to the chain.');
+  }
+
+  // Binding status
+  if (!bindingHolds) {
+    parts.push('The original C2PA content binding no longer validates.');
+  } else {
+    parts.push('Content binding remains intact between both files.');
+  }
+
+  return parts.join(' ');
+}
+
+function generateKeyFindings(
+  a: VerificationResult,
+  b: VerificationResult,
+  assertionDiff: DiffAssertion[],
+  ingredientDiff: DiffIngredient[],
+  bindingHolds: boolean,
+  aManifest: any,
+  bManifest: any,
+): KeyFinding[] {
+  const findings: KeyFinding[] = [];
+
+  // Finding 1: Content binding status
+  findings.push({
+    icon: 'binding',
+    label: 'Content Binding',
+    status: bindingHolds ? 'valid' : 'invalid',
+    detail: bindingHolds
+      ? 'Both files have valid signatures and the content chain is intact.'
+      : 'One or both signatures are invalid — the content binding has been broken.',
+  });
+
+  // Finding 2: Manifest changes
+  const manifestDiff = b.manifestCount - a.manifestCount;
+  findings.push({
+    icon: 'manifest',
+    label: 'Manifest Changes',
+    status: manifestDiff === 0 ? 'unchanged' : 'changed',
+    detail: manifestDiff === 0
+      ? `Both files have ${a.manifestCount} manifest(s). No manifest-level changes detected.`
+      : `Side A has ${a.manifestCount} manifest(s), Side B has ${b.manifestCount} (change: ${manifestDiff > 0 ? '+' : ''}${manifestDiff}).`,
+  });
+
+  // Finding 3: Metadata changes
+  const removedMeta = assertionDiff.filter((d) => d.inA && !d.inB);
+  const addedMeta = assertionDiff.filter((d) => !d.inA && d.inB);
+  const metaStatus = removedMeta.length > 0 && addedMeta.length > 0
+    ? 'changed'
+    : removedMeta.length > 0 || addedMeta.length > 0
+      ? 'changed'
+      : 'unchanged';
+  findings.push({
+    icon: 'metadata',
+    label: 'Metadata Changes',
+    status: metaStatus,
+    detail: metaStatus === 'unchanged'
+      ? 'All assertions are preserved across both files.'
+      : `${removedMeta.length} assertion(s) removed, ${addedMeta.length} assertion(s) added.`,
+  });
+
+  // Finding 4: Ingredient chain relation
+  const sharedIngredients = ingredientDiff.filter((d) => d.inA && d.inB).length;
+  const totalUniqueIngredients = ingredientDiff.length;
+  const relatedness = totalUniqueIngredients > 0
+    ? Math.round((sharedIngredients / totalUniqueIngredients) * 100)
+    : 100;
+  findings.push({
+    icon: 'relation',
+    label: 'Ingredient Chain',
+    status: relatedness >= 50 ? 'valid' : relatedness > 0 ? 'changed' : 'unknown',
+    detail: relatedness >= 50
+      ? `Files share ${relatedness}% of ingredients — likely derived from the same source.`
+      : relatedness > 0
+        ? `Files share only ${relatedness}% of ingredients — weak relationship.`
+        : 'No shared ingredients found — files may be unrelated.',
+  });
+
+  // Finding 5: Claim generator
+  const sameGenerator = aManifest?.claimGenerator === bManifest?.claimGenerator;
+  findings.push({
+    icon: 'generator',
+    label: 'Claim Generator',
+    status: sameGenerator ? 'valid' : 'changed',
+    detail: sameGenerator
+      ? `Both files were signed by the same generator: ${aManifest?.claimGenerator ?? 'Unknown'}.`
+      : `Different generators used — Side A: ${aManifest?.claimGenerator ?? 'Unknown'}, Side B: ${bManifest?.claimGenerator ?? 'Unknown'}.`,
+  });
+
+  return findings;
 }
 
 export function DiffView({ showToast }: { showToast: (msg: string) => void }) {
@@ -252,6 +412,22 @@ export function DiffView({ showToast }: { showToast: (msg: string) => void }) {
                   <span className="diff-slot-verdict-state">{slot.result.validationState}</span>
                 </div>
               )}
+              {slot.result?.sha256 && (
+                <div className="diff-slot-hash">
+                  <span className="diff-slot-hash-label">SHA-256</span>
+                  <code className="diff-slot-hash-value">{slot.result.sha256}</code>
+                </div>
+              )}
+              {slot.result && slot.result.manifestCount > 0 && (
+                <div className="diff-slot-manifest-info">
+                  <span className="diff-slot-manifest-count">
+                    {slot.result.manifestCount} manifest{slot.result.manifestCount !== 1 ? 's' : ''}
+                  </span>
+                  {slot.result.activeManifest && (
+                    <span className="diff-slot-active-manifest">Active: {slot.result.activeManifest}</span>
+                  )}
+                </div>
+              )}
               <input ref={inputRef} className="visually-hidden" type="file" accept={ACCEPTED_TYPES} onChange={(e) => handleFileInput(e, side)} />
             </div>
           );
@@ -261,6 +437,15 @@ export function DiffView({ showToast }: { showToast: (msg: string) => void }) {
       {/* Diff Results */}
       {diff && (
         <div className="diff-results">
+          {/* Derivation Summary Card */}
+          <div className="diff-summary-card">
+            <div className="diff-summary-card-header">
+              <Eye size={16} />
+              <h3>Derivation Summary</h3>
+            </div>
+            <p className="diff-summary-card-text">{diff.summary}</p>
+          </div>
+
           {/* Distance Score */}
           <div className="diff-distance">
             <div className="diff-distance-bar">
@@ -272,6 +457,34 @@ export function DiffView({ showToast }: { showToast: (msg: string) => void }) {
                 <strong style={{ color: distanceColor(diff.distance) }}>{diff.distance}%</strong>
               </div>
               <span className="diff-distance-desc">{distanceLabel(diff.distance)}</span>
+            </div>
+          </div>
+
+          {/* Key Findings Panel */}
+          <div className="diff-key-findings">
+            <div className="diff-key-findings-header">
+              <FileText size={16} />
+              <h3>Key Findings</h3>
+            </div>
+            <div className="diff-key-findings-list">
+              {diff.keyFindings.map((finding) => (
+                <div key={finding.label} className={`diff-key-finding diff-key-finding--${finding.status}`}>
+                  <div className="diff-key-finding-icon">
+                    {finding.icon === 'binding' && (finding.status === 'valid' ? <Shield size={16} /> : <ShieldOff size={16} />)}
+                    {finding.icon === 'manifest' && <GitBranch size={16} />}
+                    {finding.icon === 'metadata' && <FileText size={16} />}
+                    {finding.icon === 'relation' && <Link2 size={16} />}
+                    {finding.icon === 'generator' && <RefreshCw size={16} />}
+                  </div>
+                  <div className="diff-key-finding-content">
+                    <span className="diff-key-finding-label">{finding.label}</span>
+                    <span className="diff-key-finding-detail">{finding.detail}</span>
+                  </div>
+                  <span className={`diff-key-finding-badge diff-key-finding-badge--${finding.status}`}>
+                    {finding.status === 'valid' ? 'Valid' : finding.status === 'invalid' ? 'Invalid' : finding.status === 'changed' ? 'Changed' : finding.status === 'unchanged' ? 'Unchanged' : 'Unknown'}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
