@@ -676,10 +676,10 @@ pre {
 
 .main-workspace {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: 200px 1fr 360px;
+  gap: 12px;
   padding: 16px;
-  padding-top: 120px;
+  padding-top: 68px;
   padding-bottom: 48px;
   min-height: 100vh;
 }
@@ -1389,6 +1389,129 @@ pre {
   background: var(--color-primary-container);
   color: var(--color-on-primary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Session Sidebar ─────────────────────────────────────────── */
+
+.session-sidebar {
+  width: 200px;
+  background: var(--color-surface-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.session-sidebar-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.session-sidebar-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-on-surface-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.session-sidebar-content {
+  padding: 8px;
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.session-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.session-file-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.session-file-item.active {
+  background: rgba(76, 215, 246, 0.08);
+  border: 1px solid rgba(76, 215, 246, 0.2);
+}
+
+.session-file-icon {
+  font-size: 14px;
+}
+
+.session-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.session-file-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-file-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.session-file-badge.trusted { color: var(--badge-verified-text); }
+.session-file-badge.valid { color: var(--badge-valid-text); }
+.session-file-badge.invalid { color: var(--badge-invalid-text); }
+.session-file-badge.unknown { color: var(--color-on-surface-dim); }
+
+.session-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-on-surface-dim);
+}
+
+.session-sidebar-nav {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-on-surface-dim);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  width: 100%;
+  transition: all 0.15s;
+}
+
+.session-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-on-surface);
+}
+
+.session-nav-icon {
+  font-size: 13px;
+  width: 20px;
+  text-align: center;
 }
 
 /* ── Verification Status Panel ──────────────────────────────── */
@@ -2459,6 +2582,8 @@ pre {
   }
 
   /* Stack layout on mobile — narrow and tight */
+  .session-sidebar { display: none; }
+
   .main-workspace {
     grid-template-columns: 1fr !important;
     padding: 8px !important;

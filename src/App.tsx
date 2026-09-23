@@ -1307,7 +1307,45 @@ export default function App() {
 
       {/* Main Workspace */}
       <div className="main-workspace" onDragEnter={handleDragEnter} onDragOver={(e) => e.preventDefault()} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-        {/* Left Column */}
+        {/* Left Sidebar — Session Buffer */}
+        <aside className="session-sidebar">
+          <div className="session-sidebar-header">
+            <span className="session-sidebar-title">ACTIVE SESSION BUFFER</span>
+          </div>
+          <div className="session-sidebar-content">
+            {result ? (
+              <div className="session-file-item active">
+                <span className="session-file-icon">📄</span>
+                <div className="session-file-info">
+                  <span className="session-file-name" title={result.fileName}>{result.fileName}</span>
+                  <span className={`session-file-badge ${result.validationState === 'Trusted' ? 'trusted' : result.validationState === 'Valid' ? 'valid' : result.validationState === 'Invalid' ? 'invalid' : 'unknown'}`}>
+                    {result.validationState === 'Trusted' ? 'VALID' : result.validationState === 'Valid' ? 'VALID' : result.validationState === 'Invalid' ? 'INVALID' : '—'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="session-empty">
+                <span>No files loaded</span>
+              </div>
+            )}
+          </div>
+          <div className="session-sidebar-nav">
+            {[
+              { icon: '🔬', label: 'Stress Pipeline' },
+              { icon: '🌳', label: 'Manifest DAG' },
+              { icon: '📋', label: 'Claim Assertions' },
+              { icon: '🛡', label: 'Trust Anchors' },
+              { icon: '🔍', label: 'Hex / JUMBF Dump' },
+            ].map((item) => (
+              <button key={item.label} className="session-nav-item" type="button">
+                <span className="session-nav-icon">{item.icon}</span>
+                <span className="session-nav-label">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        {/* Center Column — Viewport */}
         <div className="asset-column">
           {/* Viewport */}
           <div className="panel viewport-panel">
