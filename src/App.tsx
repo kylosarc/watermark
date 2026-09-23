@@ -1417,6 +1417,32 @@ export default function App() {
             </div>
           </div>
 
+          {/* Quick Actions — auto-populate with current file */}
+          {result && (
+            <div className="panel" style={{ padding: 10 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className="action-tactile button-ghost" type="button" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => { setView('simulator'); }}>
+                  <Zap size={13} /> What Would Break?
+                </button>
+                <button className="action-tactile button-ghost" type="button" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => { setView('diff'); }}>
+                  <Diff size={13} /> Provenance Diff
+                </button>
+                <button className="action-tactile button-ghost" type="button" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => { setView('playground'); }}>
+                  <Settings2 size={13} /> Trust Playground
+                </button>
+                <button className="action-tactile button-ghost" type="button" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => { setView('lineage'); }}>
+                  <GitBranch size={13} /> Manifest Lineage
+                </button>
+                <button className="action-tactile button-ghost" type="button" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => { setView('edit'); }}>
+                  <Crop size={13} /> Edit Provenance
+                </button>
+                <button className="action-tactile button-ghost" type="button" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => { setView('text'); }}>
+                  <FileText size={13} /> Text Analysis
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* File Info */}
           <div className="panel file-panel">
             <div className="file-grid">
@@ -2139,11 +2165,11 @@ function Header({ view, setView, mode, setMode }: { view: View; setView: (view: 
 
   return (
     <header className="topbar">
-      <div className="brand">
-        <div className="brand-mark"><ShieldCheck size={21} /></div>
+      <div className="brand" onClick={() => { setView('inspector'); setMode('inspect'); }} style={{ cursor: 'pointer' }}>
+        <img src="/logo.svg" alt="Watermark" className="brand-logo" style={{ width: 32, height: 32 }} />
         <div className="brand-copy">
           <strong>Watermark</strong>
-          <span className="brand-subtitle">C2PA Engine v2.4 (WASM)</span>
+          <span>C2PA Engine v2.4 (WASM)</span>
         </div>
       </div>
 
