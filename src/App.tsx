@@ -1307,45 +1307,7 @@ export default function App() {
 
       {/* Main Workspace */}
       <div className="main-workspace" onDragEnter={handleDragEnter} onDragOver={(e) => e.preventDefault()} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-        {/* Left Sidebar — Session Buffer */}
-        <aside className="session-sidebar">
-          <div className="session-sidebar-header">
-            <span className="session-sidebar-title">ACTIVE SESSION BUFFER</span>
-          </div>
-          <div className="session-sidebar-content">
-            {result ? (
-              <div className="session-file-item active">
-                <span className="session-file-icon">📄</span>
-                <div className="session-file-info">
-                  <span className="session-file-name" title={result.fileName}>{result.fileName}</span>
-                  <span className={`session-file-badge ${result.validationState === 'Trusted' ? 'trusted' : result.validationState === 'Valid' ? 'valid' : result.validationState === 'Invalid' ? 'invalid' : 'unknown'}`}>
-                    {result.validationState === 'Trusted' ? 'VALID' : result.validationState === 'Valid' ? 'VALID' : result.validationState === 'Invalid' ? 'INVALID' : '—'}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="session-empty">
-                <span>No files loaded</span>
-              </div>
-            )}
-          </div>
-          <div className="session-sidebar-nav">
-            {[
-              { icon: '🔬', label: 'Stress Pipeline' },
-              { icon: '🌳', label: 'Manifest DAG' },
-              { icon: '📋', label: 'Claim Assertions' },
-              { icon: '🛡', label: 'Trust Anchors' },
-              { icon: '🔍', label: 'Hex / JUMBF Dump' },
-            ].map((item) => (
-              <button key={item.label} className="session-nav-item" type="button">
-                <span className="session-nav-icon">{item.icon}</span>
-                <span className="session-nav-label">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        {/* Center Column — Viewport */}
+        {/* Left Column */}
         <div className="asset-column">
           {/* Viewport */}
           <div className="panel viewport-panel">
@@ -1544,77 +1506,6 @@ export default function App() {
 
         {/* Right Column - Inspector */}
         <div className="inspector-column">
-          {/* Verification Status Panel — from mockups */}
-          {result && (
-            <div className="verification-status-panel">
-              <div className="verification-status-header">
-                <div className={`verification-badge ${result.validationState === 'Trusted' ? 'trusted' : result.validationState === 'Valid' ? 'valid' : result.validationState === 'Invalid' ? 'invalid' : 'unknown'}`}>
-                  {result.validationState === 'Trusted' ? '✓ CRYPTOGRAPHICALLY VERIFIED' : result.validationState === 'Valid' ? '✓ VALID' : result.validationState === 'Invalid' ? '✗ INVALID' : '? UNKNOWN'}
-                </div>
-                <div className="trust-score">
-                  <span className="trust-score-label">TRUST SCORE</span>
-                  <span className="trust-score-value">{result.validationState === 'Trusted' ? '100' : result.validationState === 'Valid' ? '75' : result.validationState === 'Invalid' ? '0' : '—'}</span>
-                  <span className="trust-score-max">/100</span>
-                </div>
-              </div>
-
-              <div className="verification-status-body">
-                <h3 className="verification-status-title">
-                  {result.validationState === 'Trusted' ? 'Origin & Chain of Custody Intact' : result.validationState === 'Valid' ? 'Valid Signature, Untrusted Issuer' : result.validationState === 'Invalid' ? 'Verification Failed' : 'No C2PA Manifest Detected'}
-                </h3>
-                <p className="verification-status-desc">
-                  {result.validationState === 'Trusted'
-                    ? 'C2PA Manifest signature validated against compliant Root Certification Authority.'
-                    : result.validationState === 'Valid'
-                    ? 'Signature is cryptographically valid, but the issuer is not in the configured trust list.'
-                    : result.validationState === 'Invalid'
-                    ? 'The manifest signature or content binding could not be verified.'
-                    : 'No C2PA Content Credentials were found in this asset.'}
-                </p>
-
-                {/* Key verification details */}
-                {activeManifest && (
-                  <div className="verification-details">
-                    <div className="verification-detail-row">
-                      <span className="verification-detail-icon">✓</span>
-                      <span className="verification-detail-label">Content Credentials</span>
-                      <span className="verification-detail-value">{activeManifest.claimGenerator ?? 'Unknown'}</span>
-                    </div>
-                    <div className="verification-detail-row">
-                      <span className="verification-detail-icon">🔗</span>
-                      <span className="verification-detail-label">Hard Binding</span>
-                      <span className="verification-detail-value">{result.validationState !== 'Invalid' ? 'PASS • EXACT 1:1 BYTE MATCH' : 'FAIL • BYTE MISMATCH'}</span>
-                    </div>
-                    {activeManifest.signatureAlgorithm && (
-                      <div className="verification-detail-row">
-                        <span className="verification-detail-icon">🔐</span>
-                        <span className="verification-detail-label">Algorithm</span>
-                        <span className="verification-detail-value">{activeManifest.signatureAlgorithm}</span>
-                      </div>
-                    )}
-                    {activeManifest.issuer && (
-                      <div className="verification-detail-row">
-                        <span className="verification-detail-icon">🏛</span>
-                        <span className="verification-detail-label">Issuer</span>
-                        <span className="verification-detail-value">{activeManifest.issuer}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Action buttons */}
-                <div className="verification-actions">
-                  <button className="verification-action-btn primary" type="button" onClick={() => copyHash()}>
-                    <Copy size={14} /> Verify Hashes
-                  </button>
-                  <button className="verification-action-btn secondary" type="button">
-                    <Download size={14} /> Export Evidence
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Tab Bar */}
           <div className="tab-bar" role="tablist" aria-label="Manifest inspector">
             {INSPECTOR_TABS.map((tab) => {
