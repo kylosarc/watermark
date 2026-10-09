@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BookOpen,
@@ -1428,11 +1428,30 @@ interface HighlightedSegment {
 }
 
 // Word-level diff: returns array of {text, type:'same'|'added'|'removed'}
-function wordDiff(a: string, b: string): Array<{ text: string; type: 'same' | 'added' | 'removed' }> {
-  const aWords = a.split(/(\s+)/);
-  const bWords = b.split(/(\s+)/);
+//
+// NOTE: the previous implementation ran a full O(m*n) LCS matrix over the
+// entire token arrays. For a few thousand words that allocates hundreds of
+// MB and freezes/crashes the tab as soon as "Strip Text" renders the
+// side-by-side view. This version trims the common prefix/suffix in linear
+// time (which covers the common "mostly unchanged" case) and only runs LCS
+// on the differing middle — with a hard cap that falls back to a single
+// removed+added block instead of crashing.
+const WORD_DIFF_MAX_CELLS = 4_000_000; // ~2000x2000 middle tokens
+const WORD_DIFF_MAX_CHARS = 500_000;
 
-  // LCS-based diff
+function mergeDiffSegments(raw: Array<{ text: string; type: 'same' | 'added' | 'removed' }>) {
+  const result: Array<{ text: string; type: 'same' | 'added' | 'removed' }> = [];
+  for (const seg of raw) {
+    if (result.length > 0 && result[result.length - 1].type === seg.type) {
+      result[result.length - 1].text += seg.text;
+    } else {
+      result.push({ ...seg });
+    }
+  }
+  return result;
+}
+
+function lcsDiff(aWords: string[], bWords: string[]): Array<{ text: string; type: 'same' | 'added' | 'removed' }> {
   const m = aWords.length;
   const n = bWords.length;
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
@@ -1442,7 +1461,6 @@ function wordDiff(a: string, b: string): Array<{ text: string; type: 'same' | 'a
     }
   }
 
-  const result: Array<{ text: string; type: 'same' | 'added' | 'removed' }> = [];
   let i = m, j = n;
   const raw: Array<{ text: string; type: 'same' | 'added' | 'removed' }> = [];
   while (i > 0 || j > 0) {
@@ -1458,16 +1476,64 @@ function wordDiff(a: string, b: string): Array<{ text: string; type: 'same' | 'a
     }
   }
   raw.reverse();
+  return mergeDiffSegments(raw);
+}
 
-  // Merge consecutive same-type segments
-  for (const seg of raw) {
-    if (result.length > 0 && result[result.length - 1].type === seg.type) {
-      result[result.length - 1].text += seg.text;
-    } else {
-      result.push({ ...seg });
-    }
+function wordDiff(a: string, b: string): Array<{ text: string; type: 'same' | 'added' | 'removed' }> {
+  if (a === b) return a ? [{ text: a, type: 'same' }] : [];
+  if (!a) return [{ text: b, type: 'added' }];
+  if (!b) return [{ text: a, type: 'removed' }];
+
+  // Hard cap: never build a DP matrix for huge inputs — degrade to a
+  // single removed+added block instead of freezing/crashing the tab.
+  if (a.length + b.length > WORD_DIFF_MAX_CHARS) {
+    return [{ text: a, type: 'removed' }, { text: b, type: 'added' }];
   }
-  return result;
+
+  const aWords = a.split(/(\s+)/);
+  const bWords = b.split(/(\s+)/);
+
+  if (aWords.length + bWords.length > 40_000) {
+    return [{ text: a, type: 'removed' }, { text: b, type: 'added' }];
+  }
+
+  // Trim common prefix / suffix in linear time.
+  let prefix = 0;
+  const minLen = Math.min(aWords.length, bWords.length);
+  while (prefix < minLen && aWords[prefix] === bWords[prefix]) prefix++;
+
+  let suffix = 0;
+  while (
+    suffix < minLen - prefix &&
+    aWords[aWords.length - 1 - suffix] === bWords[bWords.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+
+  const midA = aWords.slice(prefix, aWords.length - suffix);
+  const midB = bWords.slice(prefix, bWords.length - suffix);
+
+  if (midA.length === 0 && midB.length === 0) {
+    return [{ text: a, type: 'same' }];
+  }
+
+  // Cap the quadratic middle. Fall back to block replacement when the
+  // differing region is still huge.
+  if (midA.length * midB.length > WORD_DIFF_MAX_CELLS) {
+    const raw: Array<{ text: string; type: 'same' | 'added' | 'removed' }> = [];
+    if (prefix > 0) raw.push({ text: aWords.slice(0, prefix).join(''), type: 'same' });
+    if (midA.length > 0) raw.push({ text: midA.join(''), type: 'removed' });
+    if (midB.length > 0) raw.push({ text: midB.join(''), type: 'added' });
+    if (suffix > 0) raw.push({ text: aWords.slice(aWords.length - suffix).join(''), type: 'same' });
+    return mergeDiffSegments(raw);
+  }
+
+  const middle = lcsDiff(midA, midB);
+  const raw: Array<{ text: string; type: 'same' | 'added' | 'removed' }> = [];
+  if (prefix > 0) raw.push({ text: aWords.slice(0, prefix).join(''), type: 'same' });
+  raw.push(...middle);
+  if (suffix > 0) raw.push({ text: aWords.slice(aWords.length - suffix).join(''), type: 'same' });
+  return mergeDiffSegments(raw);
 }
 
 // Compute highlighted segments with tool attribution
@@ -1479,57 +1545,70 @@ function computeHighlights(original: string, steps: TransformStep[]): {
     return { outputSegments: [{ text: original, type: 'unchanged' }], removedSegments: [] };
   }
 
-  // Chain diffs: compute what each tool changed relative to its input
+  // Chain diffs: compute what each tool changed relative to its input.
+  // NOTE: each step's diff is computed exactly once. (The old code ran
+  // wordDiff a second time per step on texts reconstructed from the first
+  // diff — doubling the quadratic cost — and then mis-tagged duplicate
+  // words via indexOf. The segments from the single diff are sufficient.)
   const toolDiffs: Array<{ tool: TransformTool; segments: Array<{ text: string; type: 'same' | 'added' | 'removed' }> }> = [];
   for (const step of steps) {
-    toolDiffs.push({ tool: step.tool, segments: wordDiff(step.before, step.after) });
+    try {
+      toolDiffs.push({ tool: step.tool, segments: wordDiff(step.before, step.after) });
+    } catch {
+      // If diffing fails for any reason, degrade gracefully: show the
+      // step's output untagged rather than crashing the view.
+      toolDiffs.push({ tool: step.tool, segments: [{ text: step.after, type: 'same' as const }] });
+    }
   }
 
-  // Build output: start with original text, apply each tool's changes
-  // Track which words came from which tool
-  interface WordInfo { text: string; tool: TransformTool | null; isOriginal: boolean; }
-  let currentWords: WordInfo[] = original.split(/(\s+)/).map(w => ({ text: w, tool: null, isOriginal: true }));
+  // Build output: start with original text, apply each tool's changes.
+  // Track which words came from which tool.
+  interface WordInfo { text: string; tool: TransformTool | null; }
+  // Carry-over tags across chained steps: 'same' words keep the tag they
+  // had in the current list; 'added' words get the current step's tool.
+  // Steps are produced as a single-element chain today, but this stays
+  // correct if multi-step chains are added later.
+  let currentWords: WordInfo[] = original.split(/(\s+)/).map(w => ({ text: w, tool: null }));
 
   for (const td of toolDiffs) {
-    // Reconstruct the "after" text from this tool's diff
-    const afterWords: string[] = [];
-    for (const seg of td.segments) {
-      if (seg.type !== 'removed') afterWords.push(seg.text);
-    }
-    const afterText = afterWords.join('');
-
-    // Now diff current state against this tool's input to find what this tool changed
-    const currentText = currentWords.map(w => w.text).join('');
-    const inputText = td.segments.filter(s => s.type !== 'added').map(s => s.text).join('');
-    const toolWordDiff = wordDiff(inputText, afterText);
-
-    // Map the diff back to currentWords to tag which ones this tool changed
-    // Simple approach: if a word in currentWords differs from input, tag it
-    const inputWords = inputText.split(/(\s+)/);
-    const afterWordArr = afterText.split(/(\s+)/);
-
-    // Build a map of changed positions
-    const changedAfter = new Set<number>();
-    let ai = 0;
-    for (let k = 0; k < toolWordDiff.length; k++) {
-      const seg = toolWordDiff[k];
-      if (seg.type === 'added') {
-        // Find position in afterWords
-        const addedWords = seg.text.split(/(\s+)/);
-        for (const aw of addedWords) {
-          const idx = afterWordArr.indexOf(aw);
-          if (idx >= 0) changedAfter.add(idx);
+    const nextWords: WordInfo[] = [];
+    // Cursor into currentWords for 'same' segments. The 'same' text of a
+    // step equals contiguous words of the current text, so consume them in
+    // order (whitespace-tolerant) instead of indexOf-searching.
+    let cursor = 0;
+    const takeSame = (text: string) => {
+      if (!text) return;
+      // Consume current words whose concatenation covers `text`.
+      let covered = '';
+      const start = cursor;
+      while (cursor < currentWords.length && covered.length < text.length) {
+        covered += currentWords[cursor].text;
+        cursor++;
+      }
+      if (covered === text) {
+        for (let k = start; k < cursor; k++) nextWords.push(currentWords[k]);
+      } else {
+        // Alignment mismatch (shouldn't happen for chained steps) —
+        // fall back to untagged words so we never lose text.
+        cursor = start;
+        for (const w of text.split(/(\s+)/)) {
+          nextWords.push({ text: w, tool: null });
+          cursor++;
         }
       }
-    }
+    };
 
-    // Replace currentWords with afterWords, tagging changed ones
-    const newWords: WordInfo[] = afterWordArr.map((w, idx) => ({
-      text: w,
-      tool: changedAfter.has(idx) ? td.tool : null,
-      isOriginal: false,
-    }));
-    currentWords = newWords;
+    for (const seg of td.segments) {
+      if (seg.type === 'same') {
+        takeSame(seg.text);
+      } else if (seg.type === 'added') {
+        for (const w of seg.text.split(/(\s+)/)) {
+          nextWords.push({ text: w, tool: td.tool });
+        }
+      }
+      // 'removed' segments are dropped from the output (recorded below).
+    }
+    currentWords = nextWords;
   }
 
   // Build output segments
@@ -1725,6 +1804,23 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
     acc[p.category] = (acc[p.category] ?? 0) + p.count;
     return acc;
   }, {});
+
+  // Memoize the side-by-side highlight computation: it runs a word diff
+  // over the full text, so recomputing it on every render (e.g. typing,
+  // tab switches, toast updates) froze the tab on long inputs. It is now
+  // computed only when the transform inputs change, guarded by a size cap
+  // and try/catch so a pathological input degrades to plain panes.
+  const highlights = useMemo(() => {
+    if (transformSteps.length === 0 || !originalText) return null;
+    // Skip word-level highlighting for very large texts — render the
+    // plain line diff below instead of freezing the tab.
+    if (originalText.length > 200_000) return null;
+    try {
+      return computeHighlights(originalText, transformSteps);
+    } catch {
+      return null;
+    }
+  }, [originalText, transformSteps]);
 
   return (
     <div className="xform-panel">
@@ -1978,9 +2074,9 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
           </div>
 
           {viewMode === 'diff' ? (
-            transformSteps.length > 0 ? (
+            transformSteps.length > 0 && highlights ? (
               (() => {
-                const { outputSegments, removedSegments } = computeHighlights(originalText, transformSteps);
+                const { outputSegments, removedSegments } = highlights;
                 return (
                   <div className="side-by-side-diff">
                     <div className="diff-pane">
@@ -2035,10 +2131,10 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
                 <div className="diff-pane">
                   <div className="diff-pane-header">
                     <span>Original</span>
-                    <span className="diff-pane-stats">{inputText.length.toLocaleString()} chars</span>
+                    <span className="diff-pane-stats">{(originalText || inputText).length.toLocaleString()} chars</span>
                   </div>
                   <div className="diff-pane-content">
-                    {diffLines(inputText, outputText).map((line, i) => (
+                    {diffLines(originalText || inputText, outputText).map((line, i) => (
                       <div key={`orig-${i}`} className={`diff-line ${line.type === 'removed' ? 'removed' : line.type === 'unchanged' ? '' : 'dim'}`}>
                         <span className="diff-line-num">{line.type === 'removed' || line.type === 'unchanged' ? line.origNum : ''}</span>
                         <span className="diff-line-text">{line.text}</span>
@@ -2053,7 +2149,7 @@ function TextTransformPanel({ inputText, format, showToast }: { inputText: strin
                     <span className="diff-pane-stats">{outputText.length.toLocaleString()} chars</span>
                   </div>
                   <div className="diff-pane-content">
-                    {diffLines(inputText, outputText).map((line, i) => (
+                    {diffLines(originalText || inputText, outputText).map((line, i) => (
                       <div key={`out-${i}`} className={`diff-line ${line.type === 'added' ? 'added' : line.type === 'unchanged' ? '' : 'dim'}`}>
                         <span className="diff-line-num">{line.type === 'added' || line.type === 'unchanged' ? line.outNum : ''}</span>
                         <span className="diff-line-text">{line.type === 'removed' ? '' : (line.outText ?? line.text)}</span>

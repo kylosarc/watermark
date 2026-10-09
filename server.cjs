@@ -19,11 +19,40 @@ const MIME = {
 };
 
 const server = http.createServer((req, res) => {
-  let filePath = path.join(DIST, req.url === '/' ? 'index.html' : req.url);
-  if (!fs.existsSync(filePath)) filePath = path.join(DIST, 'index.html');
-  const ext = path.extname(filePath);
-  res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream');
-  fs.createReadStream(filePath).pipe(res);
+  try {
+    const urlPath = (req.url || '/').split('?')[0].split('#')[0];
+    let decoded = '/';
+    try {
+      decoded = decodeURIComponent(urlPath);
+    } catch {
+      decoded = '/';
+    }
+    // Block path traversal attempts.
+    const normalized = path.normalize(decoded).replace(/^(\.\.[/\\])+/, '');
+    let filePath = path.join(DIST, normalized === '/' ? 'index.html' : normalized);
+    // Ensure the resolved path stays inside DIST.
+    if (!filePath.startsWith(DIST)) filePath = path.join(DIST, 'index.html');
+    let stat = null;
+    try {
+      stat = fs.statSync(filePath);
+    } catch {
+      stat = null;
+    }
+    if (!stat || stat.isDirectory()) filePath = path.join(DIST, 'index.html');
+    const ext = path.extname(filePath);
+    res.setHeader('Content-Type', MIME[ext] || 'application/octet-stream');
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', (err) => {
+      console.error('Static serve error:', err.message);
+      if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Internal Server Error');
+    });
+    stream.pipe(res);
+  } catch (err) {
+    console.error('Request handler error:', err && err.message);
+    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('Internal Server Error');
+  }
 });
 
 server.listen(PORT, '0.0.0.0', () => {
