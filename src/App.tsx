@@ -1084,6 +1084,19 @@ export default function App() {
     if (isTextFile) {
       setPreviewUrl(null);
       try {
+        // Compute hash for text files too
+        const hash = await sha256Hex(file);
+        setResult({
+          status: 'missing',
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          sha256: hash,
+          validationState: 'Unknown',
+          manifestCount: 0,
+          manifests: [],
+          warnings: ['Text file — no C2PA manifest expected.'],
+        });
         // Switch to text mode and signal the TextView to process the file
         setView('text');
         window.dispatchEvent(new CustomEvent('watermark:text-file-upload', { detail: { file } }));
