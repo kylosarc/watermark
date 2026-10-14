@@ -2168,49 +2168,87 @@ pre {
 }
 
 @media (max-width: 768px) {
+  /* ── Topbar ───────────────────────────────────────────────── */
   .desktop-nav { display: none; }
+
+  .topbar {
+    height: 56px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .brand-copy strong {
+    font-size: 16px;
+  }
+
+  .brand-copy span {
+    font-size: 10px;
+  }
+
+  .mode-selector {
+    margin: 0 4px;
+    border-radius: 10px;
+  }
+
+  .mode-btn {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  .mode-btn-label {
+    font-size: 12px;
+  }
 
   .mobile-menu-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     border: 1px solid var(--color-outline-variant);
-    border-radius: 6px;
+    border-radius: 8px;
     background: var(--color-surface);
     color: var(--color-on-surface);
     cursor: pointer;
+    font-size: 20px;
   }
 
   .mobile-nav {
-    position: absolute;
-    top: 100%;
+    position: fixed;
+    top: 56px;
     left: 0;
     right: 0;
+    bottom: 0;
     background: var(--color-surface);
-    border-bottom: 1px solid var(--color-outline-variant);
-    padding: 8px;
+    border-top: 1px solid var(--color-outline-variant);
+    padding: 12px;
     display: flex;
     flex-direction: column;
     gap: 4px;
     z-index: 100;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    overflow-y: auto;
   }
 
   .mobile-nav button {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 12px;
+    padding: 12px 16px;
     border: none;
-    border-radius: 6px;
+    border-radius: 10px;
     background: transparent;
     color: var(--color-on-surface);
     cursor: pointer;
-    font-size: 13px;
+    font-size: 15px;
     text-align: left;
     width: 100%;
+    transition: background 0.15s;
   }
 
   .mobile-nav button:hover,
@@ -2219,41 +2257,11 @@ pre {
     color: var(--color-primary);
   }
 
-  .topbar {
-    height: 48px;
-    padding: 0 10px;
-  }
-
-  .brand-mark {
-    width: 28px;
-    height: 28px;
-  }
-
-  .brand-copy strong {
-    font-size: 14px;
-  }
-
-  .mode-selector {
-    margin: 0 8px;
-  }
-
-  .mode-btn-label {
-    display: none;
-  }
-
-  .mode-btn {
-    padding: 5px 8px;
-  }
-
-  .mode-btn-icon {
-    font-size: 1rem;
-  }
-
-  /* Stack layout on mobile — narrow and tight */
+  /* ── Main Layout ──────────────────────────────────────────── */
   .main-workspace {
     grid-template-columns: 1fr !important;
     padding: 8px !important;
-    padding-top: 110px !important;
+    padding-top: 64px !important;
     gap: 8px !important;
   }
 
@@ -2264,47 +2272,271 @@ pre {
   }
 
   .panel {
-    padding: 10px !important;
+    padding: 12px !important;
   }
 
   .panel-header {
     flex-direction: column;
     align-items: flex-start !important;
-    gap: 6px;
+    gap: 8px;
   }
 
-  .file-grid { grid-template-columns: repeat(2, 1fr); }
-  .crypto-grid { grid-template-columns: 1fr; }
-  .detail-grid { grid-template-columns: repeat(2, 1fr); }
-  .manifest-columns { grid-template-columns: 1fr; }
-  .lineage-chain { flex-direction: column; }
+  /* ── Viewport ─────────────────────────────────────────────── */
+  .viewport-panel {
+    min-height: 200px;
+  }
 
+  .viewport {
+    min-height: 200px;
+  }
+
+  .viewport-empty {
+    padding: 32px 16px;
+  }
+
+  .viewport-empty strong {
+    font-size: 16px;
+  }
+
+  .viewport-empty span {
+    font-size: 13px;
+  }
+
+  /* ── Command Bar ───────────────────────────────────────────── */
   .command-bar {
     flex-direction: column;
-    gap: 6px;
-    padding: 8px 10px !important;
+    gap: 8px;
+    padding: 10px 12px !important;
   }
 
   .command-actions {
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 6px;
   }
 
   .command-actions button {
+    font-size: 13px;
+    padding: 8px 14px;
+    min-height: 40px;
+  }
+
+  /* ── File Info ─────────────────────────────────────────────── */
+  .file-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .file-grid-cell {
+    padding: 8px;
+  }
+
+  .file-grid-cell span {
     font-size: 11px;
-    padding: 4px 8px;
   }
 
-  .verdict {
-    padding: 12px !important;
+  .file-grid-cell strong {
+    font-size: 13px;
   }
 
-  .verdict-title {
-    font-size: 14px;
+  /* ── Inspector ─────────────────────────────────────────────── */
+  .tab-bar {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .tab-btn {
+    font-size: 12px;
+    padding: 8px 14px;
+    min-height: 36px;
+    flex-shrink: 0;
   }
 
   .inspector-tab-content {
     padding: 8px !important;
+  }
+
+  .verdict {
+    padding: 14px !important;
+  }
+
+  .verdict-title {
+    font-size: 16px;
+  }
+
+  .verdict-subtitle {
+    font-size: 12px;
+  }
+
+  /* ── Evidence Panel ────────────────────────────────────────── */
+  .verification-status-panel {
+    margin-bottom: 8px;
+  }
+
+  .verification-status-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start !important;
+  }
+
+  .trust-score-value {
+    font-size: 24px;
+  }
+
+  .verification-actions {
+    flex-direction: column;
+  }
+
+  .verification-action-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 14px;
+  }
+
+  /* ── Hash / Crypto ─────────────────────────────────────────── */
+  .crypto-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .manifest-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .hash-container {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .hash-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* ── Batch ─────────────────────────────────────────────────── */
+  .batch-view {
+    padding: 72px 8px 48px;
+  }
+
+  .batch-table {
+    font-size: 11px;
+  }
+
+  .batch-table th,
+  .batch-table td {
+    padding: 6px 4px;
+  }
+
+  .batch-summary {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* ── Text Analysis ─────────────────────────────────────────── */
+  .txt-results {
+    padding: 8px;
+  }
+
+  .txt-section {
+    padding: 8px;
+  }
+
+  .txt-section-title {
+    font-size: 13px;
+  }
+
+  .txt-stat {
+    padding: 8px;
+  }
+
+  .txt-stat strong {
+    font-size: 14px;
+  }
+
+  .txt-stat span {
+    font-size: 11px;
+  }
+
+  /* ── Lineage ───────────────────────────────────────────────── */
+  .lineage-chain {
+    flex-direction: column;
+  }
+
+  .lineage-node {
+    width: 100%;
+  }
+
+  /* ── Quick Actions ─────────────────────────────────────────── */
+  .quick-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .quick-actions button {
+    font-size: 12px;
+    padding: 6px 10px;
+    min-height: 36px;
+  }
+
+  /* ── Metadata ──────────────────────────────────────────────── */
+  .metadata-section-tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .metadata-entries {
+    font-size: 12px;
+  }
+
+  /* ── Simulator ─────────────────────────────────────────────── */
+  .sim-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sim-card {
+    padding: 10px;
+  }
+
+  .sim-card-name {
+    font-size: 13px;
+  }
+
+  .sim-card-desc {
+    font-size: 11px;
+  }
+
+  /* ── Text Simulator ────────────────────────────────────────── */
+  .txt-sim-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .txt-sim-card {
+    padding: 10px;
+  }
+
+  .txt-sim-card-name {
+    font-size: 13px;
+  }
+
+  .txt-sim-card-desc {
+    font-size: 11px;
+  }
+
+  /* ── Footer ────────────────────────────────────────────────── */
+  .system-footer {
+    padding: 8px 12px;
+    font-size: 10px;
+  }
+
+  .footer-items {
+    flex-wrap: wrap;
+    gap: 8px;
   }
 }
 

@@ -52,6 +52,7 @@ export async function harperLint(text: string): Promise<HarperLint[]> {
   try {
     const linter = await getLinter();
     const lints = await linter.lint(text);
+    console.log('[harper] Lint returned', lints.length, 'items for', text.length, 'chars');
 
     return lints.map((l) => {
       try {
@@ -64,7 +65,8 @@ export async function harperLint(text: string): Promise<HarperLint[]> {
           end: span.end,
           suggestions: suggestions.map((s) => s.get_replacement_text()),
         };
-      } catch {
+      } catch (e) {
+        console.warn('[harper] Skipping lint item:', e);
         return null;
       }
     }).filter((l): l is HarperLint => l !== null);
