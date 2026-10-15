@@ -189,6 +189,47 @@ npm run dev
 
 Vite serves the app at `http://localhost:42069`.
 
+### Production server
+
+For serving the built `dist/` folder (no dev server):
+
+```bash
+npm run build
+
+# Option A: Python (simplest)
+cd dist && python3 -m http.server 42069 --bind 0.0.0.0
+
+# Option B: Node.js static server
+node server.cjs
+```
+
+### Persistent server (tmux)
+
+For a server that survives terminal disconnects:
+
+```bash
+tmux new-session -d -s watermark "cd dist && python3 -m http.server 42069 --bind 0.0.0.0"
+```
+
+To manage:
+```bash
+tmux ls                    # list sessions
+tmux attach -t watermark   # view server logs
+tmux kill-session -t watermark  # stop server
+```
+
+### Remote access (Tailscale)
+
+If your machine is on a Tailscale network:
+
+```bash
+# Start server bound to all interfaces
+tmux new-session -d -s watermark "cd dist && python3 -m http.server 42069 --bind 0.0.0.0"
+
+# Access via Tailscale IP
+# http://<tailscale-ip>:42069
+```
+
 ## Commands
 
 ```bash
