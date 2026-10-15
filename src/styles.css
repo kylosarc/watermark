@@ -28,6 +28,8 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 [data-theme="light"] {
@@ -2175,6 +2177,7 @@ pre {
     height: 56px;
     padding: 0 12px;
     gap: 8px;
+    overflow: visible;
   }
 
   .brand-mark {
@@ -2217,6 +2220,7 @@ pre {
     color: var(--color-on-surface);
     cursor: pointer;
     font-size: 20px;
+    flex-shrink: 0;
   }
 
   .mobile-nav {
