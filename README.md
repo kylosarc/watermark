@@ -152,7 +152,7 @@ Watermark is therefore an **evidence and inspection tool**, not a truth oracle.
 
 Files are processed in the browser rather than uploaded to a remote analysis service.
 
-Original files are not overwritten. Processing occurs in memory, with local persistence used for application state and audit information.
+Original files are never overwritten. Processing occurs in memory, with local persistence used for application state and audit information.
 
 ## What Watermark Does Not Do
 
