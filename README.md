@@ -162,24 +162,6 @@ Instead, Watermark exposes the available evidence and shows which relationships 
 This distinction is fundamental to the project.
 
 
-## What Watermark Does Not Do
-
-Watermark does not attempt to produce a single universal authenticity score.
-
-It does not claim that:
-
-* a file without C2PA provenance is necessarily inauthentic;
-* a file with C2PA provenance is necessarily truthful;
-* a valid signature proves the factual accuracy of every assertion;
-* an AI detector can reliably determine authorship from text alone;
-* the absence of a detected watermark proves that no watermark exists;
-* metadata alone establishes provenance.
-
-Instead, Watermark exposes the available evidence and shows which relationships can actually be verified.
-
-This distinction is fundamental to the project.
-
-
 ## Run locally
 
 ```bash
