@@ -1004,7 +1004,7 @@ export default function App() {
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
 
     try {
-      const response = await fetch('/sample-asset.png');
+      const response = await fetch(`${import.meta.env.BASE_URL}sample-asset.png`);
       if (!response.ok) throw new Error('Unable to load the local sample asset.');
       const blob = await response.blob();
       const sampleFile = new File([blob], SAMPLE_NAME, { type: 'image/jpeg' });
@@ -2179,7 +2179,7 @@ function Header({ view, setView, mode, setMode }: { view: View; setView: (view: 
   return (
     <header className="topbar">
       <div className="brand" onClick={() => { setView('inspector'); setMode('inspect'); }} style={{ cursor: 'pointer' }}>
-        <img src="/logo.svg" alt="Watermark" className="brand-logo" style={{ width: 32, height: 32 }} />
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="Watermark" className="brand-logo" style={{ width: 32, height: 32 }} />
         <div className="brand-copy">
           <strong>Watermark</strong>
           <span>C2PA Engine v2.4 (WASM)</span>
@@ -2216,7 +2216,7 @@ function Header({ view, setView, mode, setMode }: { view: View; setView: (view: 
       </nav>
 
       <div className="header-actions">
-        <a href="/docs/index.html" target="_blank" rel="noopener" className="help-link" title="Help & Documentation">
+        <a href={`${import.meta.env.BASE_URL}docs/index.html`} target="_blank" rel="noopener" className="help-link" title="Help & Documentation">
           <BookOpen size={17} />
         </a>
         {/* Mobile hamburger */}
