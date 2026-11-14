@@ -5,15 +5,23 @@ import { formatBytes, computeHashes, type HashResult } from '../../lib/file';
 export function HashCalculatorPanel({ file }: { file: File | null }) {
   const [hashes, setHashes] = useState<HashResult[]>([]);
   const [computing, setComputing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!file) { setHashes([]); return; }
+    if (!file) { setHashes([]); setError(null); return; }
     let cancelled = false;
     setComputing(true);
+    setError(null);
     computeHashes(file).then((result) => {
       if (!cancelled) { setHashes(result); setComputing(false); }
-    }).catch(() => { if (!cancelled) setComputing(false); });
+    }).catch((err) => {
+      if (!cancelled) {
+        setHashes([]);
+        setError(err instanceof Error ? err.message : 'Hash computation failed');
+        setComputing(false);
+      }
+    });
     return () => { cancelled = true; };
   }, [file]);
 
@@ -25,6 +33,11 @@ export function HashCalculatorPanel({ file }: { file: File | null }) {
         Hash Calculator — {file.name} ({formatBytes(file.size)})
       </div>
       {computing && <div style={{ fontSize: 11, color: 'var(--color-muted)' }}>Computing hashes...</div>}
+      {error && (
+        <div style={{ fontSize: 11, color: 'var(--color-error)' }}>
+          Hash unavailable: {error}
+        </div>
+      )}
       {hashes.map((h, i) => (
         <div key={h.algorithm} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, background: 'var(--color-surface)', border: '1px solid rgba(61,73,76,0.2)' }}>
           <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-primary)', minWidth: 60 }}>{h.algorithm}</span>

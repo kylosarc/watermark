@@ -43,6 +43,7 @@ import {
 import type { NgramEntry } from '../../lib/ngrams';
 import { UnicodeDetailPanel } from './UnicodePanel';
 import { ProviderStatusPanel } from './ProviderStatusPanel';
+import { sha256Hex } from '../../lib/file';
 import {
   storeTextItems, getStoredTextItems,
   storeStripperOpts, getStoredStripperOpts,
@@ -165,31 +166,26 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
   const selectedItem = items.find((it) => it.id === selectedId) ?? null;
 
   async function hashText(text: string): Promise<string> {
-    try {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(text);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-    } catch {
-      return Date.now().toString(16).padStart(64, '0');
-    }
+    return sha256Hex(new Blob([text], { type: 'text/plain' }));
   }
 
-  async function processOne(text: string, source: 'file' | 'paste', fileName: string | null): Promise<TextItem> {
+  async function processOne(
+    text: string,
+    source: 'file' | 'paste',
+    fileName: string | null,
+    sourceHash?: string,
+  ): Promise<TextItem> {
     const id = ++textIdCounter;
 
-    // SHA-256 (wrapped in try-catch for edge cases)
-    let sha256 = '';
-    try {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(text);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      sha256 = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-    } catch {
-      // Fallback: use timestamp as hash if crypto fails
-      sha256 = Date.now().toString(16).padStart(64, '0');
+    // For uploaded files, hash the original bytes so the digest matches other
+    // tools. Pasted text is hashed as UTF-8 content.
+    let sha256 = sourceHash ?? '';
+    if (!sha256) {
+      try {
+        sha256 = await hashText(text);
+      } catch {
+        sha256 = '';
+      }
     }
 
     let analysis: TextAnalysis | null = null;
@@ -241,8 +237,11 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
       setItems((prev) => prev.map((it) => it.id === ph.id ? { ...it, status: 'analyzing' } : it));
 
       try {
-        const extracted = await extractTextFromFile(file);
-        const result = await processOne(extracted.text, 'file', file.name);
+        const [extracted, sourceHash] = await Promise.all([
+          extractTextFromFile(file),
+          sha256Hex(file).catch(() => ''),
+        ]);
+        const result = await processOne(extracted.text, 'file', file.name, sourceHash);
         setItems((prev) => prev.map((it) => it.id === ph.id ? { ...result } : it));
       } catch {
         setItems((prev) => prev.map((it) => it.id === ph.id ? { ...it, status: 'error' as const } : it));
