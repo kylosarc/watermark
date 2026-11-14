@@ -128,6 +128,9 @@ Watermark is therefore an **evidence and inspection tool**, not a truth oracle.
 * Inspect C2PA soft-binding information
 * Identify C2PA AI-generation source-type assertions
 * Compare watermark/provenance survival across transformations
+* Scan text for hidden Unicode with exact code points, positions, and selective cleanup
+* Count word pairs and repeated 3–5 word phrases within sentence boundaries
+* Show which provider watermarks can actually be verified, with cited sources
 
 ### 🧪 Test & Simulate
 
@@ -146,6 +149,7 @@ Watermark is therefore an **evidence and inspection tool**, not a truth oracle.
 * Perform provenance-aware image editing
 * Extract text from supported documents
 * Analyze and transform text
+* Export the full text analysis as JSON, or flattened summary, phrase, and NLP CSVs
 * Produce self-contained trust reports
 
 ### 🔒 Local-First Privacy
@@ -245,6 +249,11 @@ src/
 │   ├── harper.ts        Grammar checker (WASM, lazy-loaded)
 │   ├── winkNlp.ts       NLP analysis (sentiment, POS, entities)
 │   ├── transform.ts     Text stripping, PII redaction, unsloping, homoglyphs
+│   ├── textAnalysis.ts  Text metrics, style heuristics, NLP enrichment
+│   ├── ngrams.ts        Word-pair and 3–6 word phrase counting
+│   ├── textForensics.ts Hidden-Unicode scan and selective cleanup
+│   ├── textExport.ts    Full JSON and summary/phrase/NLP CSV exports
+│   ├── providers.ts     Cited provider status and cleanup-layer model
 │   ├── extract.ts       Text extraction (PDF, PPTX, DOCX, jschardet)
 │   ├── file.ts          Hashing (SHA-256, SHA-1, MD5), format detection
 │   ├── persist.ts       localStorage + IndexedDB persistence
@@ -255,7 +264,7 @@ src/
     ├── provenance/      DiffView, LineageView, ProvenanceGraph, EvidencePanel
     ├── simulator/       SimulatorView (What Would Break? + Survival Matrix)
     ├── playground/      PlaygroundView (Trust Policy rules)
-    ├── text/            TextView, TextDetailPanel, NlpDetailPanel, TextTransformPanel
+    ├── text/            TextView, UnicodePanel, ProviderStatusPanel, TextTransformPanel
     └── batch/           BatchView (multi-file verification)
 ```
 
@@ -269,6 +278,9 @@ src/
 - Scientific notation, chemical formulas, and technical content may be incorrectly flagged
 - Text extraction may lose formatting, embedded images, or complex layouts
 - The unsloper is designed for prose and may not work on code or technical docs
+- Hidden Unicode characters are not proof of AI; word processors and chat apps insert them too
+- The style score is an experimental heuristic, not a watermark detector or authorship test
+- Claude and SynthID text watermarks cannot be verified locally by any public tool
 
 ### Video and media limitations
 
