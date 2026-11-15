@@ -79,6 +79,8 @@ import {
   clearAll,
 } from './lib/persist';
 import { storeFileBlob, getStoredFileBlob, clearFileBlob } from './lib/persist';
+import { setCurrentFile, getCurrentFile, subscribeCurrentFile } from './lib/currentFile';
+import { getToolPreferences, storeToolPreferences, type ToolPreferences } from './lib/preferences';
 import { loadAuditTrail, getAuditEntries, clearAuditTrail, exportAuditTrail, auditLog, type AuditEntry } from './lib/audit';
 import './styles.css';
 
@@ -483,8 +485,25 @@ const ALWAYS_VISIBLE = NAV_ITEMS_BASE.filter((item) =>
   ['evidence', 'settings'].includes(item.id)
 );
 
-function FutureView({ view, result }: { view: Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>; result: VerificationResult | null }) {
+function FutureView({ view, result, showToast }: { view: Exclude<View, 'inspector' | 'batch' | 'diff' | 'simulator' | 'playground' | 'lineage' | 'text'>; result: VerificationResult | null; showToast: (msg: string) => void }) {
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>(() => loadAuditTrail());
+  const [toolPrefs, setToolPrefs] = useState<ToolPreferences>(() => getToolPreferences());
+
+  function updateToolPrefs(next: ToolPreferences) {
+    setToolPrefs(next);
+    storeToolPreferences(next);
+  }
+
+  const currentMedia = getCurrentFile();
+  const secureContext = typeof isSecureContext !== 'undefined' ? isSecureContext : false;
+  const webCrypto = typeof crypto !== 'undefined' && typeof crypto.subtle?.digest === 'function';
+  const diagnostics = [
+    `secure_context: ${secureContext}`,
+    `sha256_path: ${webCrypto ? 'webcrypto' : 'js-fallback'}`,
+    `c2pa_sdk: @contentauth/c2pa-web 0.15.1`,
+    `current_media: ${currentMedia?.name ?? 'none'}`,
+    `user_agent: ${navigator.userAgent}`,
+  ].join('\n');
 
   // Refresh audit trail when view changes
   useEffect(() => {
@@ -496,6 +515,60 @@ function FutureView({ view, result }: { view: Exclude<View, 'inspector' | 'batch
   if (view === 'settings') {
     return (
       <main className="app-main" style={{ padding: 16, maxWidth: 700, margin: '0 auto' }}>
+        <section className="settings-card">
+          <h2>Tool Defaults</h2>
+          <p>
+            The media loaded in the Inspector is carried into What Would Break?, Trust
+            Playground, and Edit with Provenance. Auto-run only applies when a file is
+            already loaded; manual uploads still wait for you.
+          </p>
+
+          <label className="tool-pref-row">
+            <input
+              type="checkbox"
+              checked={toolPrefs.autoRunSimulator}
+              onChange={(e) => updateToolPrefs({ ...toolPrefs, autoRunSimulator: e.target.checked })}
+            />
+            <span>
+              <strong>Run What Would Break? automatically</strong>
+              <small>Re-encode, resize, crop, and re-verify the current image on entry.</small>
+            </span>
+          </label>
+
+          <label className="tool-pref-row">
+            <input
+              type="checkbox"
+              checked={toolPrefs.autoRunPlayground}
+              onChange={(e) => updateToolPrefs({ ...toolPrefs, autoRunPlayground: e.target.checked })}
+            />
+            <span>
+              <strong>Run Trust Playground policy automatically</strong>
+              <small>Evaluate the enabled rules against the current media on entry.</small>
+            </span>
+          </label>
+        </section>
+
+        <section className="settings-card">
+          <div className="settings-card-head">
+            <div>
+              <h2>Runtime Diagnostics</h2>
+              <p>Useful when hashing or verification behaves differently on another device.</p>
+            </div>
+            <button
+              className="action-tactile button-ghost"
+              type="button"
+              style={{ fontSize: 11 }}
+              onClick={() => {
+                navigator.clipboard?.writeText(diagnostics);
+                showToast('Diagnostics copied');
+              }}
+            >
+              <Copy size={12} /> Copy
+            </button>
+          </div>
+          <pre className="settings-diagnostics">{diagnostics}</pre>
+        </section>
+
         <h2 style={{ marginBottom: 16 }}>Audit Trail</h2>
         <p style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 16 }}>
           Timestamped log of all verification, export, and edit actions in this session.
@@ -592,8 +665,12 @@ function FutureView({ view, result }: { view: Exclude<View, 'inspector' | 'batch
 /* ── Provenance-Aware Image Editor ────────────────────────────── */
 
 function ProvenanceEditor({ result, showToast }: { result: VerificationResult | null; showToast: (msg: string) => void }) {
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const initialImage = (() => {
+    const file = getCurrentFile();
+    return file && file.type.startsWith('image/') ? file : null;
+  })();
+  const [sourceFile, setSourceFile] = useState<File | null>(initialImage);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(() => initialImage ? URL.createObjectURL(initialImage) : null);
   const [originalHash, setOriginalHash] = useState<string | null>(null);
   const [outputHash, setOutputHash] = useState<string | null>(null);
   const [originalState, setOriginalState] = useState<string | null>(null);
@@ -603,18 +680,58 @@ function ProvenanceEditor({ result, showToast }: { result: VerificationResult | 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sourceFileRef = useRef<File | null>(initialImage);
+  const previewUrlRef = useRef<string | null>(previewUrl);
+
+  useEffect(() => {
+    sourceFileRef.current = sourceFile;
+  }, [sourceFile]);
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+  }, []);
+
+  function replacePreview(file: File): void {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const next = URL.createObjectURL(file);
+    previewUrlRef.current = next;
+    setPreviewUrl(next);
+  }
+
+  function selectFile(file: File): void {
+    sourceFileRef.current = file;
+    setSourceFile(file);
+    replacePreview(file);
+    setCropRect(null);
+    setOutputHash(null);
+    sha256Hex(file).then(setOriginalHash);
+    setOriginalState(result?.validationState ?? null);
+  }
+
+  useEffect(() => {
+    if (initialImage) {
+      sha256Hex(initialImage).then(setOriginalHash);
+      setOriginalState(result?.validationState ?? null);
+    }
+    return subscribeCurrentFile((file) => {
+      if (!file || !file.type.startsWith('image/') || sourceFileRef.current) return;
+      selectFile(file);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
-    setSourceFile(file);
-    setCropRect(null);
-    setOutputHash(null);
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    sha256Hex(file).then(setOriginalHash);
-    setOriginalState(result?.validationState ?? null);
+    selectFile(file);
     e.target.value = '';
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    selectFile(file);
   }
 
   function handleCanvasMouseDown(e: React.MouseEvent<HTMLCanvasElement>) {
@@ -821,9 +938,7 @@ function ProvenanceEditor({ result, showToast }: { result: VerificationResult | 
 
 
 // Module-level file store — persists across tab switches
-let _currentFile: File | null = null;
 let _currentPreviewUrl: string | null = null;
-export function getCurrentFile(): File | null { return _currentFile; }
 
 /* ── Main App ────────────────────────────────────────────────── */
 
@@ -966,7 +1081,7 @@ export default function App() {
     getStoredFileBlob().then((blob) => {
       if (blob && !file) {
         setFile(blob);
-        _currentFile = blob;
+        setCurrentFile(blob);
         if (blob.type.startsWith('image/')) {
           setPreviewUrl(URL.createObjectURL(blob));
         } else if (blob.type.startsWith('video/')) {
@@ -1008,6 +1123,7 @@ export default function App() {
       if (!response.ok) throw new Error('Unable to load the local sample asset.');
       const blob = await response.blob();
       const sampleFile = new File([blob], SAMPLE_NAME, { type: 'image/jpeg' });
+      setCurrentFile(sampleFile);
       const nextPreview = window.URL.createObjectURL(blob);
     setPreviewUrl(nextPreview);
     _currentPreviewUrl = nextPreview;
@@ -1071,7 +1187,7 @@ export default function App() {
     setIsSample(false);
     setResult(null);
     setFile(file);
-    _currentFile = file;
+    setCurrentFile(file);
     storeFileInfo(file);
     storeFileBlob(file); // persist to IndexedDB for cross-tab access
     if (previewUrl) window.URL.revokeObjectURL(previewUrl);
@@ -1152,7 +1268,7 @@ export default function App() {
     setPreviewUrl(null);
     setResult(null);
     setFile(null);
-    _currentFile = null;
+    setCurrentFile(null);
     _currentPreviewUrl = null;
     setIsSample(false);
     setZoom(100);
@@ -1278,7 +1394,7 @@ export default function App() {
     return (
       <div className="app-frame">
         <Header view={view} setView={setView} mode={mode} setMode={setMode} />
-        <FutureView view={view} result={result} />
+        <FutureView view={view} result={result} showToast={showToast} />
         <Footer />
         <ToastContainer toasts={toasts} />
       </div>

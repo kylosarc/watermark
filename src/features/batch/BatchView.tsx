@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { verifyFile } from '../../lib/c2pa';
 import { errorResult } from '../../lib/verification';
+import { computeCrossFilePatterns, patternsExport, type PatternCount } from '../../lib/batchPatterns';
 import { formatBytes } from '../../lib/file';
 import type { VerificationResult, VerificationStatus, ValidationState } from '../../lib/types';
 import { storeMediaBatch, getStoredMediaBatch } from '../../lib/persist';
@@ -31,6 +32,29 @@ export interface BatchItem {
 }
 
 let batchIdCounter = 0;
+
+function PatternChips({ counts, empty }: { counts: PatternCount[]; empty: string }) {
+  if (counts.length === 0) {
+    return <span className="batch-pattern-note">{empty}</span>;
+  }
+
+  return (
+    <div className="batch-pattern-values">
+      {counts.slice(0, 8).map((count) => (
+        <span
+          key={count.value}
+          className="batch-pattern-chip"
+          title={`${count.value} — ${count.files} file${count.files === 1 ? '' : 's'}`}
+        >
+          {count.value} <strong>×{count.files}</strong>
+        </span>
+      ))}
+      {counts.length > 8 && (
+        <span className="batch-pattern-chip muted">+{counts.length - 8} more</span>
+      )}
+    </div>
+  );
+}
 
 export function BatchView({ showToast }: { showToast: (msg: string) => void }) {
   const [items, setItems] = useState<BatchItem[]>(() => {
@@ -250,6 +274,19 @@ export function BatchView({ showToast }: { showToast: (msg: string) => void }) {
   const validCount = items.filter((i) => i.result?.validationState === 'Valid').length;
   const invalidCount = items.filter((i) => i.result?.validationState === 'Invalid').length;
   const missingCount = items.filter((i) => i.result?.status === 'missing').length;
+  const verifiedResults = items.flatMap((item) => (item.result ? [item.result] : []));
+  const patterns = computeCrossFilePatterns(verifiedResults);
+  const signedLabel = patterns.signedRange.earliest && patterns.signedRange.latest
+    ? (patterns.signedRange.earliest === patterns.signedRange.latest
+      ? patterns.signedRange.earliest
+      : `${patterns.signedRange.earliest} → ${patterns.signedRange.latest}`)
+    : 'not reported';
+
+  function exportPatterns() {
+    if (verifiedResults.length === 0) return;
+    downloadFile(patternsExport(patterns), 'batch-patterns.json', 'application/json');
+    showToast('Cross-file patterns exported');
+  }
 
   return (
     <main className="batch-view" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
@@ -322,6 +359,66 @@ export function BatchView({ showToast }: { showToast: (msg: string) => void }) {
             </div>
           )}
         </div>
+      )}
+
+      {/* Cross-file Patterns */}
+      {items.length > 1 && doneCount > 0 && (
+        <section className="batch-patterns">
+          <div className="batch-patterns-head">
+            <div>
+              <h2>Cross-file patterns</h2>
+              <p>
+                {patterns.totalFiles} verified file{patterns.totalFiles === 1 ? '' : 's'} compared.
+                Every count comes from a manifest below; a claim is not a verdict.
+              </p>
+            </div>
+            <button className="action-tactile button-ghost" type="button" style={{ fontSize: 11 }} onClick={exportPatterns}>
+              <Download size={13} /> Patterns JSON
+            </button>
+          </div>
+
+          <div className="batch-pattern-grid">
+            <div className="batch-pattern-card">
+              <span className="batch-pattern-label">Issuers</span>
+              <PatternChips counts={patterns.issuers} empty="No issuer reported." />
+            </div>
+            <div className="batch-pattern-card">
+              <span className="batch-pattern-label">Claim generators</span>
+              <PatternChips counts={patterns.generators} empty="No claim generator reported." />
+            </div>
+            <div className="batch-pattern-card">
+              <span className="batch-pattern-label">Signature algorithms</span>
+              <PatternChips counts={patterns.algorithms} empty="No signature algorithm reported." />
+            </div>
+            <div className="batch-pattern-card">
+              <span className="batch-pattern-label">Content signals</span>
+              <div className="batch-pattern-values">
+                <span className="batch-pattern-chip" title="Files declaring an AI-related DigitalSourceType">
+                  AI source <strong>×{patterns.aiGenerated}</strong>
+                </span>
+                <span className="batch-pattern-chip" title="Files mentioning watermark or SynthID assertions">
+                  Watermark claims <strong>×{patterns.watermarkClaims}</strong>
+                </span>
+                <span className="batch-pattern-chip" title="Files carrying soft binding assertions">
+                  Soft bindings <strong>×{patterns.softBindings}</strong>
+                </span>
+              </div>
+            </div>
+            <div className="batch-pattern-card wide">
+              <span className="batch-pattern-label">Shared assertions (2+ files)</span>
+              <PatternChips counts={patterns.sharedAssertions} empty="No assertion label appears in 2+ files." />
+            </div>
+          </div>
+
+          <p className="batch-pattern-note">
+            <strong>Validation mix:</strong> {patterns.trusted} trusted · {patterns.valid} valid · {patterns.invalid} invalid · {patterns.unknown} unknown · {patterns.withoutC2PA} without C2PA
+            <br />
+            <strong>Signed:</strong> {signedLabel}
+          </p>
+          {patterns.notes.map((note) => (
+            <p className="batch-pattern-note" key={note}>{note}</p>
+          ))}
+        </section>
       )}
 
       {/* Results Table */}

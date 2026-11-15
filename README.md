@@ -7,10 +7,11 @@
   <a href="https://kylosarc.github.io/watermark/"><img src="https://img.shields.io/badge/Launch-Web%20App-4edea3?style=for-the-badge&logo=githubpages&logoColor=white" alt="Launch Web App"/></a>
   <a href="https://github.com/kylosarc/watermark"><img src="https://img.shields.io/badge/GitHub-Source-333?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"/></a>
   <a href="http://localhost:42069"><img src="https://img.shields.io/badge/Launch-Local%20Dev-4edea3?style=for-the-badge&logo=vite&logoColor=white" alt="Launch Dev"/></a>
+  <a href="https://github.com/kylosarc/watermark/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/kylosarc/watermark/ci.yml?branch=main&style=for-the-badge&label=CI" alt="CI"/></a>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19"/>
+  <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 18"/>
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript 5"/>
   <img src="https://img.shields.io/badge/C2PA-0.15.1-4cd7f6?style=flat-square&logo=contentauthenticityinitiative&logoColor=white" alt="C2PA 0.15.1"/>
   <img src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite 8"/>
@@ -47,6 +48,10 @@ A useful inspection tool needs to let people see:
 
 Watermark puts those questions into a single local-first workspace.
 
+> There is, as yet, no law that requires that I submit to the tyranny of provenance.
+
+Watermark treats provenance as evidence to examine, not authority to obey.
+
 
 ## Verification Boundaries
 
@@ -65,6 +70,8 @@ Likewise:
 * The absence of a detected watermark does not prove that no watermark exists.
 
 Watermark is therefore an **evidence and inspection tool**, not a truth oracle.
+
+The project rule is simple: **everything should be falsifiable**. If a result cannot be checked against a source, it is labeled as a claim or a heuristic, never as a verdict.
 
 
 ## Screenshots
@@ -112,12 +119,21 @@ Watermark is therefore an **evidence and inspection tool**, not a truth oracle.
 * Inspect hard and soft content bindings
 * Examine complete manifest JSON
 
+### 🔗 Carry Evidence Between Tools
+
+* Inspect an object once, then open **What Would Break?**, **Trust Playground**, or **Edit with Provenance** without re-uploading it
+* Auto-run simulations and policy checks on entry when a shared object is already loaded
+* Turn auto-run off per browser in **Trust Anchors / Settings**; manual uploads always wait for an explicit run
+* Check **Runtime Diagnostics** (secure context, hash path, active media, SDK version) when a device behaves differently
+* Export a cross-file pattern summary from Batch: issuers, claim generators, signature algorithms, shared assertions, AI/watermark claims, and signing range
+
 ### 🔎 Investigate Provenance
 
 * Explore manifests, assertions, and ingredients
 * Examine manifest lineage
 * Compare two provenance states with **Provenance Diff**
 * Generate structured **Evidence Packs**
+* Compare issuers, claim generators, signature algorithms, and shared assertions across a folder
 * Review file metadata alongside C2PA provenance
 * Inspect binary structure and entropy
 * Examine what survives common transformations
@@ -235,16 +251,18 @@ npm run typecheck
 npm test
 ```
 
+Every push and pull request to `main` runs `.github/workflows/ci.yml`: install, typecheck, tests, and a production build.
+
 ## Architecture
 
 ```
 src/
-├── App.tsx              ~1900 lines — Main app, routing, header/footer
+├── App.tsx              ~2400 lines — Main app, routing, header/footer
 ├── main.tsx             React entry + ErrorBoundary
 ├── styles.css           CSS variables, dark/light theme
 ├── lib/
 │   ├── c2pa.ts          C2PA SDK wrapper (v0.15.1 Reader.fromBlob API)
-│   ├── verification.ts  Manifest summarization, AI detection, soft binding
+│   ├── verification.ts  Manifest summarization, AI source types, soft binding
 │   ├── evidence.ts      EvidenceStatus, Finding, Perspective domain model
 │   ├── metadata.ts      EXIF extraction, binary analysis, entropy heatmap, sanitizer
 │   ├── harper.ts        Grammar checker (WASM, lazy-loaded)
@@ -258,6 +276,9 @@ src/
 │   ├── extract.ts       Text extraction (PDF, PPTX, DOCX, jschardet)
 │   ├── file.ts          Hashing (SHA-256, SHA-1, MD5), format detection
 │   ├── persist.ts       localStorage + IndexedDB persistence
+│   ├── currentFile.ts   Shared current-media store across tools
+│   ├── preferences.ts   Tool auto-run defaults, stored locally
+│   ├── batchPatterns.ts Cross-file issuer/generator/assertion patterns
 │   ├── audit.ts         Session audit trail
 │   └── types.ts         Shared TypeScript types
 └── features/
@@ -266,7 +287,7 @@ src/
     ├── simulator/       SimulatorView (What Would Break? + Survival Matrix)
     ├── playground/      PlaygroundView (Trust Policy rules)
     ├── text/            TextView, UnicodePanel, ProviderStatusPanel, TextTransformPanel
-    └── batch/           BatchView (multi-file verification)
+    └── batch/           BatchView (multi-file verification + pattern summary)
 ```
 
 ## Important notes
@@ -297,12 +318,23 @@ src/
 
 A trusted C2PA result means the SDK validated the manifest signature, content binding, and issuer trust policy. It does not prove that every statement in the manifest is true. A missing manifest does not establish that content is human-made or AI-generated.
 
+## Roadmap
+
+Near-term work, ordered by how much it strengthens the evidence:
+
+- **Signed C2PA fixture corpus** — real signed manifests plus tampered, truncated, soft-bound, AI-source, and watermark-claim variants, used by tests instead of hand-built objects alone.
+- **Browser smoke tests** — secure and insecure contexts, 320/390/1440 px layouts, shared-media flow, and auto-run defaults running against a real Chromium.
+- **Accessibility pass** — keyboard navigation, focus order, contrast, and screen-reader labels across the inspector and tool views.
+- **Bundle budget** — keep the C2PA WASM, wink model, and main bundle from growing silently; fail CI on unexplained size regressions.
+- **Opt-in public-URL inspection** — explicit, labeled, public URLs only; never uploads, never permission-granting, never part of the default path.
+
 ## References
 
 - [C2PA technical specification](https://spec.c2pa.org/specifications/specifications/2.4/specs/C2PA_Specification.html)
 - [C2PA JavaScript SDK](https://github.com/contentauth/c2pa-js)
 - [Supported C2PA media formats](https://opensource.contentauthenticity.org/docs/c2patool/docs/supported-formats)
 - [SynthID overview](https://deepmind.google/technologies/synthid)
+- [Haimaker — Claude watermark removal guide (layered cleanup)](https://haimaker.ai/blog/claude-watermark-removal-guide/)
 - [Harper - Grammar checker](https://github.com/Automattic/harper)
 - [wink-nlp - NLP toolkit](https://github.com/winkjs/wink-nlp)
 - [exifr - EXIF reader](https://github.com/MikeKovarik/exifr)

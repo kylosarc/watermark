@@ -21,6 +21,8 @@
   --color-on-surface-dim: #bcc9cd;
   --color-outline: #869397;
   --color-outline-variant: #3d494c;
+  --color-muted: var(--color-outline);
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   color: #e0e2ea;
   background: var(--color-surface);
@@ -637,7 +639,7 @@ pre {
 
 .main-workspace {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
   padding: 16px;
   padding-top: 120px;
@@ -649,12 +651,14 @@ pre {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 
 .inspector-column {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 
 /* ── Panels ──────────────────────────────────────────────────── */
@@ -2161,6 +2165,100 @@ pre {
   margin-top: 8px;
 }
 
+/* ── Settings ────────────────────────────────────────────────── */
+
+.settings-card {
+  background: var(--color-surface-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.settings-card h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-on-surface);
+}
+
+.settings-card > p,
+.settings-card-head p {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-on-surface-dim);
+  margin-top: 4px;
+  margin-bottom: 12px;
+}
+
+.settings-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-card-head p {
+  margin-bottom: 8px;
+}
+
+.tool-pref-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(61, 73, 76, 0.25);
+  cursor: pointer;
+}
+
+.tool-pref-row input[type='checkbox'] {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  accent-color: var(--color-primary);
+}
+
+.tool-pref-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tool-pref-row strong {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-on-surface);
+}
+
+.tool-pref-row small {
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--color-on-surface-dim);
+}
+
+.settings-diagnostics {
+  margin: 0;
+  padding: 12px;
+  background: var(--color-surface);
+  border: 1px solid rgba(61, 73, 76, 0.25);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+  color: var(--color-on-surface-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+  .settings-card {
+    padding: 12px;
+  }
+
+  .settings-card-head {
+    flex-direction: column;
+  }
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 
 @media (max-width: 1280px) {
@@ -2184,6 +2282,26 @@ pre {
     width: 36px;
     height: 36px;
     border-radius: 10px;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand-copy {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .brand-copy strong,
+  .brand-copy span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .header-actions {
+    flex-shrink: 0;
   }
 
   .brand-copy strong {
@@ -2263,13 +2381,14 @@ pre {
 
   /* ── Main Layout ──────────────────────────────────────────── */
   .main-workspace {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     padding: 8px !important;
     padding-top: 64px !important;
     gap: 8px !important;
   }
 
   .asset-column,
+  .inspector-column,
   .info-column {
     width: 100% !important;
     min-width: 0 !important;
@@ -2544,6 +2663,32 @@ pre {
   }
 }
 
+/* Compact topbar: keep the hamburger and mode switch inside the viewport. */
+@media (max-width: 680px) {
+  .mode-btn-label {
+    display: none;
+  }
+
+  .mode-btn {
+    gap: 0;
+    padding: 8px 10px;
+  }
+
+  .brand-copy span {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .brand-copy {
+    display: none;
+  }
+
+  .help-link {
+    display: none;
+  }
+}
+
 /* ── Batch Report View ──────────────────────────────────────── */
 
 .batch-view {
@@ -2596,6 +2741,122 @@ pre {
   font-family: 'JetBrains Mono', monospace;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* ── Cross-file Patterns ────────────────────────────────────── */
+
+.batch-patterns {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--color-surface-lowest);
+  border: 1px solid rgba(76, 215, 246, 0.22);
+  border-radius: 8px;
+}
+
+.batch-patterns-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.batch-patterns-head h2 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-on-surface);
+}
+
+.batch-patterns-head p {
+  font-size: 0.6875rem;
+  color: var(--color-on-surface-dim);
+}
+
+.batch-pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.batch-pattern-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--color-surface);
+  border: 1px solid rgba(61, 73, 76, 0.25);
+  border-radius: 6px;
+}
+
+.batch-pattern-card.wide {
+  grid-column: span 2;
+}
+
+.batch-pattern-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-outline);
+}
+
+.batch-pattern-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.batch-pattern-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 7px;
+  background: rgba(76, 215, 246, 0.08);
+  border: 1px solid rgba(76, 215, 246, 0.18);
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.625rem;
+  color: var(--color-on-surface-dim);
+  overflow-wrap: anywhere;
+}
+
+.batch-pattern-chip strong {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.batch-pattern-chip.muted {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.batch-pattern-chip.muted strong {
+  color: var(--color-on-surface-dim);
+}
+
+.batch-pattern-note {
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--color-on-surface-dim);
+}
+
+.batch-pattern-note strong {
+  color: var(--color-on-surface);
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .batch-patterns {
+    padding: 12px;
+  }
+
+  .batch-pattern-card.wide {
+    grid-column: auto;
+  }
 }
 
 .batch-table-wrap {

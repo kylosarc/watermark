@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { verifyFile } from '../../lib/c2pa';
 import { formatBytes } from '../../lib/file';
+import { getCurrentFile, subscribeCurrentFile } from '../../lib/currentFile';
+import { getToolPreferences } from '../../lib/preferences';
 import {
   type Finding,
   type EvidenceStatus,
@@ -207,24 +209,68 @@ interface SimResult {
 }
 
 export function SimulatorView({ showToast }: { showToast: (msg: string) => void }) {
-  const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const sharedFile = (() => {
+    const file = getCurrentFile();
+    return file && file.type.startsWith('image/') ? file : null;
+  })();
+  const [sourceFile, setSourceFile] = useState<File | null>(sharedFile);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(() => sharedFile ? URL.createObjectURL(sharedFile) : null);
   const [results, setResults] = useState<SimResult[]>([]);
   const [running, setRunning] = useState(false);
   const [expandedWhy, setExpandedWhy] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sourceFileRef = useRef<File | null>(sharedFile);
+  const previewUrlRef = useRef<string | null>(previewUrl);
+  const autoRunRef = useRef(Boolean(sharedFile) && getToolPreferences().autoRunSimulator);
 
   useEffect(() => {
-    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
+    sourceFileRef.current = sourceFile;
+  }, [sourceFile]);
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
   }, []);
+
+  function replacePreview(file: File): void {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const next = URL.createObjectURL(file);
+    previewUrlRef.current = next;
+    setPreviewUrl(next);
+  }
+
+  function adoptSharedFile(file: File): void {
+    if (!file.type.startsWith('image/') || sourceFileRef.current) return;
+    sourceFileRef.current = file;
+    setSourceFile(file);
+    replacePreview(file);
+    setResults([]);
+    setExpandedWhy(new Set());
+    autoRunRef.current = getToolPreferences().autoRunSimulator;
+  }
+
+  useEffect(() => {
+    return subscribeCurrentFile((file) => {
+      if (file) adoptSharedFile(file);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-run once when a shared image is already present. Manual uploads keep
+  // the explicit "Run All Simulations" button.
+  useEffect(() => {
+    if (!sourceFile || !autoRunRef.current || running || results.length > 0) return;
+    autoRunRef.current = false;
+    void runSimulations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceFile]);
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    replacePreview(file);
+    sourceFileRef.current = file;
     setSourceFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
     setResults([]);
     e.target.value = '';
   }
@@ -233,9 +279,9 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    replacePreview(file);
+    sourceFileRef.current = file;
     setSourceFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
     setResults([]);
   }
 
@@ -326,7 +372,10 @@ export function SimulatorView({ showToast }: { showToast: (msg: string) => void 
   }
 
   function clearAll() {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    sourceFileRef.current = null;
+    autoRunRef.current = false;
     setSourceFile(null);
     setPreviewUrl(null);
     setResults([]);

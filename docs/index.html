@@ -668,6 +668,11 @@
             <h3>AI Detection & Soft Binding</h3>
             <p>Surfaces AI-generated indicators from DigitalSourceType, SynthID/watermark claims, and C2PA 2.2+ soft binding fingerprints.</p>
           </div>
+          <div class="feature-card">
+            <div class="feature-card-icon" style="background:rgba(78,222,163,0.1);color:var(--color-tertiary)"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+            <h3>Shared Workspace</h3>
+            <p>The object you inspect is carried into What Would Break?, Trust Playground, and Edit with Provenance. Re-uploading is optional, not required.</p>
+          </div>
         </div>
       </section>
 
@@ -675,7 +680,7 @@
       <section class="section" id="batch">
         <div class="section-icon secondary"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg></div>
         <h2>Batch Report</h2>
-        <p class="subtitle">Scan entire folders of media files in parallel. Results exportable as CSV or JSON.</p>
+        <p class="subtitle">Scan entire folders of media files in parallel. Results exportable as CSV, JSON, Evidence Pack, or cross-file patterns.</p>
 
         <div class="feature-grid">
           <div class="feature-card">
@@ -687,8 +692,12 @@
             <p>File name, size, MIME type, C2PA status, validation state, issuer, algorithm — all in one view.</p>
           </div>
           <div class="feature-card">
-            <h3>CSV / JSON Export</h3>
-            <p>Export batch results for compliance reports, audit trails, or further analysis.</p>
+            <h3>Cross-File Patterns</h3>
+            <p>Issuers, claim generators, signature algorithms, shared assertions, AI/watermark claims, signing range, and notes on what the batch cannot prove.</p>
+          </div>
+          <div class="feature-card">
+            <h3>CSV / JSON / Patterns Export</h3>
+            <p>Export row-level results for compliance reports, or the cross-file summary with its own versioned schema.</p>
           </div>
         </div>
       </section>
@@ -742,6 +751,10 @@
             <h3>JSON / CSV Export</h3>
             <p>Export simulation results for compliance documentation or tamper-resistance analysis.</p>
           </div>
+          <div class="feature-card">
+            <h3>Shared Media & Auto-Run</h3>
+            <p>Adopts the object currently loaded in the Inspector, then runs the simulations on entry by default. Manual uploads still wait for an explicit run. Auto-run can be disabled in Settings.</p>
+          </div>
         </div>
       </section>
 
@@ -763,6 +776,10 @@
           <div class="feature-card">
             <h3>Per-Rule Results</h3>
             <p>Pass/fail for every rule with detailed messages. Export policy + results as JSON.</p>
+          </div>
+          <div class="feature-card">
+            <h3>Shared Media & Auto-Run</h3>
+            <p>Tests the object currently loaded in the Inspector and evaluates the enabled policy on entry by default. Manual uploads still wait for an explicit run.</p>
           </div>
         </div>
       </section>
@@ -942,7 +959,7 @@ matters. <span class="cmt">(2 patterns removed, 4 verbose → direct)</span></co
           </div>
           <div class="tech-item">
             <h4 style="color:var(--color-warning)">Crypto</h4>
-            <p>SubtleCrypto — Browser-native SHA-256, SHA-1, MD5 hashing via WebCrypto API</p>
+            <p>WebCrypto when available, with pure-JS SHA-256, SHA-1, and MD5 fallbacks for insecure contexts. Hashes are never fabricated.</p>
           </div>
           <div class="tech-item">
             <h4>Grammar</h4>
@@ -966,7 +983,7 @@ matters. <span class="cmt">(2 patterns removed, 4 verbose → direct)</span></co
           </div>
           <div class="tech-item">
             <h4>Framework</h4>
-            <p>React 19 + TypeScript + Vite 8 — Fast dev server and optimized builds</p>
+            <p>React 18 + TypeScript + Vite 8 — Fast dev server and optimized builds</p>
           </div>
           <div class="tech-item">
             <h4>Fonts</h4>

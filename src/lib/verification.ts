@@ -1,17 +1,25 @@
 import type { Ingredient, Manifest, ManifestStore, ValidationStatus } from '@contentauth/c2pa-web';
 import type { ManifestSummary, ValidationCode, ValidationState, VerificationResult } from './types';
 
-// AI generation indicators from DigitalSourceType
+// AI generation indicators from DigitalSourceType. C2PA manifests use both
+// c2pa.org and cv.iptc.org hosts, so match the final path segment.
 const AI_SOURCE_TYPES = new Set([
-  'http://c2pa.org/digitalsourcetype/trainedAlgorithmicMedia',
-  'http://c2pa.org/digitalsourcetype/algorithmicMedia',
-  'http://c2pa.org/digitalsourcetype/compositeWithTrainedAlgorithmicMedia',
-  'http://c2pa.org/digitalsourcetype/algorithmicallyEnhanced',
-  'http://c2pa.org/digitalsourcetype/dataDrivenMedia',
+  'trainedAlgorithmicMedia',
+  'trainedAlgorithmicData',
+  'algorithmicMedia',
+  'compositeWithTrainedAlgorithmicMedia',
+  'algorithmicallyEnhanced',
+  'dataDrivenMedia',
+  'compositeSynthetic',
 ]);
 
 // Watermark / SynthID assertion labels
 const WATERMARK_PATTERNS = /synthid|watermark|stable.?signature|deep.?fake|invisible.?watermark/i;
+
+function isAISourceType(value: string): boolean {
+  const segment = value.split('/').filter(Boolean).pop();
+  return segment ? AI_SOURCE_TYPES.has(segment) : false;
+}
 
 function asText(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -116,16 +124,18 @@ export function summarizeManifestStore(
 
     // Extract soft binding assertions
     const softBinding = (manifest.assertions ?? [])
-      .filter((a) => a.label.toLowerCase().includes('softbinding') || a.label.toLowerCase().includes('soft_binding'))
+      .filter((a) => /soft[-_.]?binding/i.test(a.label))
       .map((a) => ({ algorithm: a.label, value: JSON.stringify(a.data ?? '') }));
 
     // Extract digital source type for AI detection
     const digitalSourceType = (() => {
       for (const a of (manifest.assertions ?? [])) {
-        if (a.label === 'c2pa.actions' && Array.isArray(a.data)) {
+        if (a.label.startsWith('c2pa.actions') && Array.isArray(a.data)) {
           for (const action of a.data) {
-            if (action.digitalSource) return action.digitalSource;
-            if (action.type?.digitalSource) return action.type.digitalSource;
+            const candidate = action.digitalSourceType
+              ?? action.digitalSource
+              ?? action.type?.digitalSource;
+            if (typeof candidate === 'string' && candidate.length > 0) return candidate;
           }
         }
       }
@@ -155,8 +165,13 @@ export function summarizeManifestStore(
       ]),
       softBinding: softBinding.length > 0 ? softBinding : undefined,
       digitalSourceType: digitalSourceType ?? undefined,
-      isAIGenerated: digitalSourceType ? AI_SOURCE_TYPES.has(digitalSourceType) : undefined,
+      isAIGenerated: digitalSourceType ? isAISourceType(digitalSourceType) : undefined,
       watermarkClaims: watermarkClaims.length > 0 ? watermarkClaims : undefined,
+      signatureInfo: signature ? {
+        issuer: asText(signature.issuer),
+        commonName: asText(signature.common_name),
+        serialNumber: asText(signature.cert_serial_number),
+      } : undefined,
     };
   });
 
