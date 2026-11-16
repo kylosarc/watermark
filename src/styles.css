@@ -354,7 +354,7 @@ pre {
   position: fixed;
   top: 0;
   width: 100%;
-  z-index: 50;
+  z-index: 300;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2342,11 +2342,15 @@ pre {
   }
 
   .mobile-nav {
-    position: fixed;
+    /* The topbar's backdrop-filter makes it the containing block for fixed
+       descendants, so a fixed menu collapses to the topbar's height. Anchor
+       the menu to the topbar and give it an explicit viewport height. */
+    position: absolute;
     top: 56px;
     left: 0;
     right: 0;
-    bottom: 0;
+    height: calc(100vh - 56px);
+    height: calc(100dvh - 56px);
     background: var(--color-surface);
     border-top: 1px solid var(--color-outline-variant);
     padding: 12px;
@@ -2355,6 +2359,7 @@ pre {
     gap: 4px;
     z-index: 100;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .mobile-nav button {
