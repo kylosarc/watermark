@@ -167,6 +167,7 @@ The project rule is simple: **everything should be falsifiable**. If a result ca
 * Extract text from supported documents
 * Analyze and transform text
 * Export the full text analysis as JSON, or flattened summary, phrase, and NLP CSVs
+* Export a complete flat-text or tidy-CSV report for the selected file or every file in the batch
 * Produce self-contained trust reports
 
 ### 🔒 Local-First Privacy
@@ -271,7 +272,7 @@ src/
 │   ├── textAnalysis.ts  Text metrics, style heuristics, NLP enrichment
 │   ├── ngrams.ts        Word-pair and 3–6 word phrase counting
 │   ├── textForensics.ts Hidden-Unicode scan and selective cleanup
-│   ├── textExport.ts    Full JSON and summary/phrase/NLP CSV exports
+│   ├── textExport.ts    Full JSON, complete TXT/CSV report, summary/phrase/NLP CSVs
 │   ├── providers.ts     Cited provider status and cleanup-layer model
 │   ├── extract.ts       Text extraction (PDF, PPTX, DOCX, jschardet)
 │   ├── file.ts          Hashing (SHA-256, SHA-1, MD5), format detection

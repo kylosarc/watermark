@@ -20,6 +20,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react';
 import { verifyFile } from '../../lib/c2pa';
 import { extractTextFromFile, TEXT_ACCEPT, detectFormat } from '../../lib/extract';
@@ -39,6 +40,7 @@ import {
 } from '../../lib/textAnalysis';
 import {
   buildTextAnalysisExport, buildTextSummaryCSV, buildPhraseCSV, buildNlpCSV,
+  buildCompleteTextReport, buildCompleteTextReportCSV,
 } from '../../lib/textExport';
 import type { NgramEntry } from '../../lib/ngrams';
 import { UnicodeDetailPanel } from './UnicodePanel';
@@ -70,19 +72,23 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
     const maxId = Math.max(...stored.map((s) => s.id ?? 0), 0);
     textIdCounter = maxId;
     // Restore items from storage (without File objects, analysis is null — will re-analyze)
-    return stored.map((s) => ({
-      id: s.id ?? 0,
-      content: s.content ?? '',
-      source: (s.source as 'paste' | 'file') ?? 'paste',
-      fileName: s.fileName ?? 'restored',
-      sha256: s.sha256 ?? '',
-      format: s.format ?? 'text',
-      c2paResult: null,
-      analysis: null,
-      status: 'done' as const,
-    }));
+    return stored.map((s) => {
+      const source = (s.source as 'paste' | 'file') ?? 'paste';
+      return {
+        id: s.id ?? 0,
+        content: s.content ?? '',
+        source,
+        fileName: source === 'paste' ? null : (s.fileName ?? 'restored'),
+        sha256: s.sha256 ?? '',
+        format: s.format ?? 'text',
+        c2paResult: null,
+        analysis: null,
+        status: 'done' as const,
+      };
+    });
   });
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -363,6 +369,33 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
     showToast('NLP CSV exported');
   }
 
+  function exportCompleteReport(scopeItems: TextItem[], format: 'txt' | 'csv') {
+    if (scopeItems.length === 0) return;
+    const rawBase = scopeItems.length === 1
+      ? (scopeItems[0].fileName ?? 'pasted').replace(/\.[^.]+$/, '')
+      : `all-${scopeItems.length}`;
+    const base = rawBase.replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'text';
+    const countLabel = `${scopeItems.length} file${scopeItems.length === 1 ? '' : 's'}`;
+
+    if (format === 'txt') {
+      downloadText(
+        buildCompleteTextReport(scopeItems),
+        'text/plain;charset=utf-8',
+        `watermark-text-report-${base}.txt`,
+      );
+      showToast(`Complete text report exported (${countLabel})`);
+    } else {
+      downloadText(
+        buildCompleteTextReportCSV(scopeItems),
+        'text/csv;charset=utf-8',
+        `watermark-text-report-${base}.csv`,
+      );
+      showToast(`Complete CSV report exported (${countLabel})`);
+    }
+
+    setExportOpen(false);
+  }
+
   function loadExample() {
     setPasteText(EXAMPLE_TEXT);
     showToast('Example loaded — click Analyze Text');
@@ -457,6 +490,15 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
           <div className="txt-actions">
             <button className="action-tactile button-ghost" type="button" onClick={exportAll} disabled={doneItems.length === 0} title="Complete JSON export: analysis, NLP, n-grams, hidden Unicode scan, C2PA and methodology">
               <Download size={15} /> Export Full JSON
+            </button>
+            <button
+              className="action-tactile button-secondary"
+              type="button"
+              onClick={() => setExportOpen(true)}
+              disabled={doneItems.length === 0}
+              title="Export the complete analysis as a flat text report or tidy CSV, for one file or all files"
+            >
+              <Download size={15} /> Complete TXT / CSV
             </button>
             <button className="action-tactile button-ghost" type="button" onClick={exportTextCSV} disabled={doneItems.length === 0}>
               <Download size={15} /> Summary CSV
@@ -702,7 +744,145 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
           )}
         </>
       )}
+
+      {exportOpen && (
+        <CompleteReportDialog
+          items={doneItems}
+          selectedId={selectedId}
+          onClose={() => setExportOpen(false)}
+          onExport={exportCompleteReport}
+        />
+      )}
     </main>
+  );
+}
+
+/* ── Complete Report Export Dialog ───────────────────────────── */
+
+function CompleteReportDialog({
+  items,
+  selectedId,
+  onClose,
+  onExport,
+}: {
+  items: TextItem[];
+  selectedId: number | null;
+  onClose: () => void;
+  onExport: (items: TextItem[], format: 'txt' | 'csv') => void;
+}) {
+  const initialScope = selectedId !== null && items.some((item) => item.id === selectedId)
+    ? selectedId
+    : 'all';
+  const [scope, setScope] = useState<number | 'all'>(initialScope);
+  const [format, setFormat] = useState<'txt' | 'csv'>('txt');
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  const chosen = scope === 'all'
+    ? items
+    : items.filter((item) => item.id === scope);
+  const chosenLabel = scope === 'all'
+    ? `${items.length} file${items.length === 1 ? '' : 's'}`
+    : (chosen[0]?.fileName ?? 'Pasted text');
+
+  function itemLabel(item: TextItem): string {
+    const name = item.fileName ?? 'Pasted text';
+    const words = item.analysis?.wordCount;
+    return words !== undefined ? `${name} — ${words.toLocaleString()} words` : name;
+  }
+
+  return (
+    <div className="txt-export-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="txt-export-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="txt-export-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="txt-export-head">
+          <div>
+            <h2 id="txt-export-title">Export complete text analysis</h2>
+            <p>
+              Every metric, style signal, n-gram, hidden-Unicode finding, NLP result,
+              and C2PA summary. Choose one file or all analyzed files.
+            </p>
+          </div>
+          <button className="txt-export-close" type="button" onClick={onClose} aria-label="Close export dialog">
+            <X size={16} />
+          </button>
+        </div>
+
+        <label className="txt-export-field">
+          <span>Scope</span>
+          <select
+            value={scope === 'all' ? 'all' : String(scope)}
+            onChange={(e) => setScope(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+          >
+            <option value="all">All analyzed files ({items.length})</option>
+            {items.map((item) => (
+              <option key={item.id} value={item.id}>{itemLabel(item)}</option>
+            ))}
+          </select>
+        </label>
+
+        <fieldset className="txt-export-formats">
+          <legend>Format</legend>
+          <label className={format === 'txt' ? 'selected' : ''}>
+            <input
+              type="radio"
+              name="txt-export-format"
+              value="txt"
+              checked={format === 'txt'}
+              onChange={() => setFormat('txt')}
+            />
+            <span>
+              <strong>Flat text (.txt)</strong>
+              <small>Human-readable report with one section per analysis area.</small>
+            </span>
+          </label>
+          <label className={format === 'csv' ? 'selected' : ''}>
+            <input
+              type="radio"
+              name="txt-export-format"
+              value="csv"
+              checked={format === 'csv'}
+              onChange={() => setFormat('csv')}
+            />
+            <span>
+              <strong>Tidy CSV (.csv)</strong>
+              <small>One data point per row, including every n-gram and Unicode finding.</small>
+            </span>
+          </label>
+        </fieldset>
+
+        <p className="txt-export-note">
+          Exporting <strong>{chosenLabel}</strong>. Style scores are heuristics, not watermark
+          detection. A missing signal is not proof that a watermark is absent.
+        </p>
+
+        <div className="txt-export-actions">
+          <button className="action-tactile button-ghost" type="button" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="action-tactile button-primary"
+            type="button"
+            onClick={() => onExport(chosen, format)}
+            disabled={chosen.length === 0}
+            autoFocus
+          >
+            <Download size={15} /> Export {format === 'txt' ? 'TXT' : 'CSV'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

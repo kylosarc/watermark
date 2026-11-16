@@ -4600,6 +4600,185 @@ pre {
   flex-wrap: wrap;
 }
 
+/* Complete report export dialog */
+
+.txt-export-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(3px);
+}
+
+.txt-export-dialog {
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.txt-export-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.txt-export-head h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-on-surface);
+}
+
+.txt-export-head p {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-on-surface-dim);
+}
+
+.txt-export-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 6px;
+  background: var(--color-surface-low);
+  color: var(--color-on-surface-dim);
+  cursor: pointer;
+}
+
+.txt-export-close:hover {
+  color: var(--color-on-surface);
+  border-color: var(--color-outline);
+}
+
+.txt-export-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.txt-export-field > span,
+.txt-export-formats legend {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-outline);
+}
+
+.txt-export-field select {
+  width: 100%;
+  padding: 9px 10px;
+  background: var(--color-surface-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 6px;
+  color: var(--color-on-surface);
+  font-size: 0.8125rem;
+}
+
+.txt-export-formats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.txt-export-formats > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  background: var(--color-surface-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.txt-export-formats > label.selected {
+  border-color: rgba(76, 215, 246, 0.45);
+  background: rgba(76, 215, 246, 0.06);
+}
+
+.txt-export-formats input[type='radio'] {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  accent-color: var(--color-primary);
+}
+
+.txt-export-formats span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.txt-export-formats strong {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-on-surface);
+}
+
+.txt-export-formats small {
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--color-on-surface-dim);
+}
+
+.txt-export-note {
+  padding: 10px;
+  background: var(--color-surface-lowest);
+  border-left: 2px solid var(--color-primary-dim);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--color-on-surface-dim);
+}
+
+.txt-export-note strong {
+  color: var(--color-on-surface);
+  font-weight: 500;
+}
+
+.txt-export-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  .txt-export-dialog {
+    padding: 16px;
+  }
+
+  .txt-export-actions {
+    flex-direction: column-reverse;
+  }
+
+  .txt-export-actions .action-tactile {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 /* Drop Zone */
 
 .txt-drop {
