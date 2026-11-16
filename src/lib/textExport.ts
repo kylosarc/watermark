@@ -14,6 +14,7 @@ import {
   type HiddenCategoryId,
   type HiddenScanResult,
 } from './textForensics';
+import { analyzeWriting, suggestSynonyms, type WritingAnalysis } from './writingAnalysis';
 import {
   CLEANUP_LAYERS,
   CLEANUP_SOURCES,
@@ -56,6 +57,10 @@ export function buildTextAnalysisExport(
     const hidden = scanHiddenCharacters(item.content);
     const ngrams = analysis.ngrams;
     const preview = item.content.slice(0, 2000);
+    const writing = analyzeWriting(item.content, {
+      pov: item.writingPov,
+      ignoreDialogue: item.writingIgnoreDialogue,
+    });
 
     return {
       id: item.id,
@@ -74,6 +79,7 @@ export function buildTextAnalysisExport(
           : 'Source preview omitted by export option.',
       },
       analysis,
+      writing,
       nlp: {
         available: Object.keys(analysis.posDistribution).length > 0,
         engine: 'wink-nlp (wink-eng-lite-web-model)',
@@ -316,6 +322,16 @@ export function buildTextSummaryCSV(items: TextItem[]): string {
     'Longest Repeated Phrase',
     'C2PA Status',
     'C2PA Validation',
+    'POV Detected',
+    'POV Anomalies',
+    'Clichés',
+    'Similes',
+    'Metaphor Candidates',
+    'Adverbs /1k',
+    'Dialogue %',
+    'Flesch-Kincaid Grade',
+    'Word Echoes',
+    'Unique Content Words',
   ];
 
   const rows = items.map((item) => {
@@ -327,6 +343,10 @@ export function buildTextSummaryCSV(items: TextItem[]): string {
     const fiveGramLevel = analysis.ngrams.levels.find((level) => level.n === 5);
     const topPhrase = analysis.ngrams.topPhrases[0];
     const longest = analysis.ngrams.longestRepeatedPhrase;
+    const writing = analyzeWriting(item.content, {
+      pov: item.writingPov,
+      ignoreDialogue: item.writingIgnoreDialogue,
+    });
 
     return [
       item.id,
@@ -372,6 +392,16 @@ export function buildTextSummaryCSV(items: TextItem[]): string {
       longest?.phrase ?? '',
       item.c2paResult?.status ?? 'not-run',
       item.c2paResult?.validationState ?? 'Unknown',
+      writing.pov.detected,
+      writing.pov.anomalies.length,
+      writing.cliches[0]?.count ?? 0,
+      writing.similes.count,
+      writing.metaphors.count,
+      writing.adverbs.per1000.toFixed(1),
+      (writing.dialogue.dialogueRatio * 100).toFixed(1),
+      writing.readability.fleschKincaidGrade.toFixed(1),
+      writing.echoes.reduce((sum, echo) => sum + echo.count, 0),
+      writing.uniqueContentWords,
     ];
   });
 
@@ -440,7 +470,11 @@ function reportSummaryCounts(items: TextItem[]) {
   const analyzed = items.map((item) => {
     const analysis = reportAnalysis(item);
     const hidden = scanHiddenCharacters(item.content);
-    return { item, analysis, hidden };
+    const writing = analyzeWriting(item.content, {
+      pov: item.writingPov,
+      ignoreDialogue: item.writingIgnoreDialogue,
+    });
+    return { item, analysis, hidden, writing };
   });
 
   return {
@@ -450,6 +484,8 @@ function reportSummaryCounts(items: TextItem[]) {
     hiddenSignals: analyzed.reduce((sum, entry) => sum + entry.hidden.totalSignals, 0),
     withHidden: analyzed.filter((entry) => entry.hidden.totalSignals > 0).length,
     withC2pa: analyzed.filter((entry) => entry.item.c2paResult?.status === 'ready').length,
+    withPovAnomalies: analyzed.filter((entry) => entry.writing.pov.anomalies.length > 0).length,
+    cliches: analyzed.reduce((sum, entry) => sum + (entry.writing.cliches[0]?.count ?? 0), 0),
   };
 }
 
@@ -484,9 +520,11 @@ export function buildCompleteTextReport(items: TextItem[]): string {
   pushField(lines, 'items_with_hidden_signals', summary.withHidden);
   pushField(lines, 'total_hidden_signals', summary.hiddenSignals);
   pushField(lines, 'items_with_c2pa', summary.withC2pa);
+  pushField(lines, 'items_with_pov_anomalies', summary.withPovAnomalies);
+  pushField(lines, 'total_cliches', summary.cliches);
   pushField(lines, 'style_score_note', 'Heuristic only. It is not a watermark detector or an authorship test.');
 
-  summary.analyzed.forEach(({ item, analysis, hidden }, index) => {
+  summary.analyzed.forEach(({ item, analysis, hidden, writing }, index) => {
     lines.push('');
     lines.push('='.repeat(78));
     lines.push(`ITEM ${index + 1} OF ${items.length}: ${reportItemName(item)}`);
@@ -658,6 +696,122 @@ export function buildCompleteTextReport(items: TextItem[]): string {
       });
     }
 
+    pushSection(lines, 'Writing: POV');
+    pushField(lines, 'choice', writing.pov.choice);
+    pushField(lines, 'detected', writing.pov.detected);
+    pushField(lines, 'dialogue_excluded', writing.pov.dialogueExcluded);
+    pushField(lines, 'first_person_pronouns', writing.pov.counts.first);
+    pushField(lines, 'second_person_pronouns', writing.pov.counts.second);
+    pushField(lines, 'third_person_pronouns', writing.pov.counts.third);
+    pushField(lines, 'anomaly_count', writing.pov.anomalies.length);
+    if (writing.pov.anomalies.length === 0) {
+      lines.push('(no POV anomalies)');
+    } else {
+      for (const anomaly of writing.pov.anomalies) {
+        lines.push(
+          `sentence ${anomaly.sentenceIndex}: expected ${anomaly.expected}, ` +
+          `found ${anomaly.found.join('/')}: ${anomaly.text}`,
+        );
+      }
+    }
+
+    pushSection(lines, 'Writing: readability');
+    pushField(lines, 'flesch_reading_ease', reportNumber(writing.readability.fleschReadingEase, 1));
+    pushField(lines, 'flesch_kincaid_grade', reportNumber(writing.readability.fleschKincaidGrade, 1));
+    pushField(lines, 'gunning_fog', reportNumber(writing.readability.gunningFog, 1));
+    pushField(lines, 'sentence_average_words', reportNumber(writing.rhythm.average, 1));
+    pushField(lines, 'sentence_longest_words', writing.rhythm.longest);
+    pushField(lines, 'sentences_short', writing.rhythm.short);
+    pushField(lines, 'sentences_medium', writing.rhythm.medium);
+    pushField(lines, 'sentences_long', writing.rhythm.long);
+    pushField(lines, 'sentences_very_long', writing.rhythm.veryLong);
+
+    pushSection(lines, 'Writing: word frequency');
+    if (writing.frequencies.length === 0) {
+      lines.push('(none)');
+    } else {
+      for (const entry of writing.frequencies) {
+        lines.push(`${entry.word}: ${entry.count} (${reportNumber(entry.per1000, 1)}/1k)`);
+      }
+    }
+
+    pushSection(lines, 'Writing: echoes');
+    if (writing.echoes.length === 0) {
+      lines.push('(none)');
+    } else {
+      for (const echo of writing.echoes) {
+        lines.push(`${echo.word}: ${echo.count} close repeat(s)`);
+        for (const example of echo.examples) {
+          lines.push(`  ${example.first} -> ${example.gap} words -> ${example.second}`);
+        }
+      }
+    }
+
+    pushSection(lines, 'Writing: sentence openers');
+    if (writing.sentenceOpeners.length === 0) {
+      lines.push('(none)');
+    } else {
+      for (const opener of writing.sentenceOpeners) {
+        lines.push(`${opener.word}: ${opener.count}`);
+      }
+    }
+    pushField(lines, 'conjunction_starts', writing.conjunctionStarts);
+
+    pushSection(lines, 'Writing: adverbs');
+    pushField(lines, 'total', writing.adverbs.total);
+    pushField(lines, 'per_1000_words', reportNumber(writing.adverbs.per1000, 1));
+    for (const entry of writing.adverbs.top) {
+      lines.push(`${entry.word}: ${entry.count}`);
+    }
+
+    pushSection(lines, 'Writing: nominalisations');
+    pushField(lines, 'total', writing.nominalizations.total);
+    pushField(lines, 'per_1000_words', reportNumber(writing.nominalizations.per1000, 1));
+    for (const entry of writing.nominalizations.top) {
+      lines.push(`${entry.word}: ${entry.count}`);
+    }
+
+    pushSection(lines, 'Writing: dialogue');
+    pushField(lines, 'dialogue_segments', writing.dialogue.segments);
+    pushField(lines, 'dialogue_characters', writing.dialogue.dialogueCharacters);
+    pushField(lines, 'narration_characters', writing.dialogue.narrationCharacters);
+    pushField(lines, 'dialogue_ratio', reportNumber(writing.dialogue.dialogueRatio * 100, 1));
+    pushField(lines, 'said_count', writing.dialogue.said);
+    pushField(lines, 'said_bookisms', writing.dialogue.saidBookisms.count);
+    pushField(lines, 'adverb_tags', writing.dialogue.adverbTags.count);
+
+    for (const tic of writing.tics) {
+      pushSection(lines, `Writing: ${tic.label}`);
+      pushField(lines, 'count', tic.count);
+      for (const example of tic.examples) lines.push(`- ${example}`);
+    }
+
+    if (writing.cliches.length > 0) {
+      pushSection(lines, 'Writing: clichés');
+      pushField(lines, 'count', writing.cliches[0].count);
+      for (const example of writing.cliches[0].examples) lines.push(`- ${example}`);
+    }
+
+    pushSection(lines, 'Writing: simile candidates');
+    pushField(lines, 'count', writing.similes.count);
+    for (const example of writing.similes.examples) lines.push(`- ${example}`);
+
+    pushSection(lines, 'Writing: metaphor candidates');
+    pushField(lines, 'count', writing.metaphors.count);
+    for (const example of writing.metaphors.examples) lines.push(`- ${example}`);
+
+    pushSection(lines, 'Writing: offline alternatives');
+    if (writing.synonyms.length === 0) {
+      lines.push('(none)');
+    } else {
+      for (const entry of writing.synonyms) {
+        lines.push(`${entry.word} (${entry.count}x): ${entry.suggestions.join(', ')}`);
+      }
+    }
+
+    pushSection(lines, 'Writing notes');
+    for (const note of writing.notes) lines.push(`- ${note}`);
+
     pushSection(lines, 'C2PA');
     const c2pa = item.c2paResult;
     pushField(lines, 'status', c2pa?.status ?? 'not-run');
@@ -746,7 +900,7 @@ export function buildCompleteTextReportCSV(items: TextItem[]): string {
   row('', 'ALL', 'report', '', 'total_hidden_signals', summary.hiddenSignals, '');
   row('', 'ALL', 'report', '', 'items_with_c2pa', summary.withC2pa, '');
 
-  summary.analyzed.forEach(({ item, analysis, hidden }) => {
+  summary.analyzed.forEach(({ item, analysis, hidden, writing }) => {
     const name = reportItemName(item);
     const id = item.id;
 
@@ -867,6 +1021,97 @@ export function buildCompleteTextReportCSV(items: TextItem[]): string {
     });
     analysis.sentenceSentiments.forEach((sentiment, sentenceIndex) => {
       row(id, name, 'nlp_sentence_sentiment', `sentence-${sentenceIndex + 1}`, 'sentiment', reportNumber(sentiment, 4), '');
+    });
+
+    row(id, name, 'writing_pov', '', 'choice', writing.pov.choice, '');
+    row(id, name, 'writing_pov', '', 'detected', writing.pov.detected, '');
+    row(id, name, 'writing_pov', '', 'dialogue_excluded', writing.pov.dialogueExcluded, '');
+    row(id, name, 'writing_pov', '', 'first_person_pronouns', writing.pov.counts.first, '');
+    row(id, name, 'writing_pov', '', 'second_person_pronouns', writing.pov.counts.second, '');
+    row(id, name, 'writing_pov', '', 'third_person_pronouns', writing.pov.counts.third, '');
+    row(id, name, 'writing_pov', '', 'anomaly_count', writing.pov.anomalies.length, '');
+    for (const anomaly of writing.pov.anomalies) {
+      row(id, name, 'writing_pov_anomaly', `sentence-${anomaly.sentenceIndex}`, 'expected', anomaly.expected, '');
+      row(id, name, 'writing_pov_anomaly', `sentence-${anomaly.sentenceIndex}`, 'found', anomaly.found.join('/'), '');
+      row(id, name, 'writing_pov_anomaly', `sentence-${anomaly.sentenceIndex}`, 'text', anomaly.text, '');
+    }
+
+    row(id, name, 'writing_readability', '', 'flesch_reading_ease', reportNumber(writing.readability.fleschReadingEase, 1), '');
+    row(id, name, 'writing_readability', '', 'flesch_kincaid_grade', reportNumber(writing.readability.fleschKincaidGrade, 1), '');
+    row(id, name, 'writing_readability', '', 'gunning_fog', reportNumber(writing.readability.gunningFog, 1), '');
+    row(id, name, 'writing_rhythm', '', 'sentences', writing.rhythm.total, '');
+    row(id, name, 'writing_rhythm', '', 'average_words', reportNumber(writing.rhythm.average, 1), '');
+    row(id, name, 'writing_rhythm', '', 'longest_words', writing.rhythm.longest, '');
+    row(id, name, 'writing_rhythm', 'short', 'count', writing.rhythm.short, 'Sentences up to 10 words');
+    row(id, name, 'writing_rhythm', 'medium', 'count', writing.rhythm.medium, 'Sentences 11-20 words');
+    row(id, name, 'writing_rhythm', 'long', 'count', writing.rhythm.long, 'Sentences 21-35 words');
+    row(id, name, 'writing_rhythm', 'very_long', 'count', writing.rhythm.veryLong, 'Sentences 36+ words');
+
+    for (const entry of writing.frequencies) {
+      row(id, name, 'word_frequency', entry.word, 'count', entry.count, '');
+      row(id, name, 'word_frequency', entry.word, 'per_1000', reportNumber(entry.per1000, 1), '');
+    }
+
+    for (const echo of writing.echoes) {
+      row(id, name, 'writing_echo', echo.word, 'close_repeats', echo.count, 'Within 75 words');
+      echo.examples.forEach((example, echoIndex) => {
+        row(id, name, 'writing_echo_example', echo.word, `example-${echoIndex + 1}`, example.gap, `${example.first} -> ${example.second}`);
+      });
+    }
+
+    for (const opener of writing.sentenceOpeners) {
+      row(id, name, 'writing_sentence_opener', opener.word, 'count', opener.count, '');
+    }
+    row(id, name, 'writing_sentence_opener', '', 'conjunction_starts', writing.conjunctionStarts, 'And/But/So/Because/Or/Yet/Then');
+
+    row(id, name, 'writing_adverb', '', 'total', writing.adverbs.total, '');
+    row(id, name, 'writing_adverb', '', 'per_1000', reportNumber(writing.adverbs.per1000, 1), '');
+    for (const entry of writing.adverbs.top) {
+      row(id, name, 'writing_adverb', entry.word, 'count', entry.count, '');
+    }
+
+    row(id, name, 'writing_nominalization', '', 'total', writing.nominalizations.total, '');
+    row(id, name, 'writing_nominalization', '', 'per_1000', reportNumber(writing.nominalizations.per1000, 1), '');
+    for (const entry of writing.nominalizations.top) {
+      row(id, name, 'writing_nominalization', entry.word, 'count', entry.count, '');
+    }
+
+    for (const tic of writing.tics) {
+      row(id, name, 'writing_tic', tic.label, 'count', tic.count, '');
+      tic.examples.forEach((example, exampleIndex) => {
+        row(id, name, 'writing_tic_example', tic.label, `example-${exampleIndex + 1}`, example, '');
+      });
+    }
+
+    for (const cliche of writing.cliches) {
+      row(id, name, 'writing_cliche', cliche.label, 'count', cliche.count, '');
+      cliche.examples.forEach((example, exampleIndex) => {
+        row(id, name, 'writing_cliche_example', cliche.label, `example-${exampleIndex + 1}`, example, '');
+      });
+    }
+
+    row(id, name, 'writing_simile', '', 'count', writing.similes.count, 'Grammar candidates only');
+    writing.similes.examples.forEach((example, exampleIndex) => {
+      row(id, name, 'writing_simile_example', `example-${exampleIndex + 1}`, 'text', example, '');
+    });
+    row(id, name, 'writing_metaphor', '', 'count', writing.metaphors.count, 'Grammar candidates only');
+    writing.metaphors.examples.forEach((example, exampleIndex) => {
+      row(id, name, 'writing_metaphor_example', `example-${exampleIndex + 1}`, 'text', example, '');
+    });
+
+    row(id, name, 'writing_dialogue', '', 'segments', writing.dialogue.segments, '');
+    row(id, name, 'writing_dialogue', '', 'dialogue_characters', writing.dialogue.dialogueCharacters, '');
+    row(id, name, 'writing_dialogue', '', 'narration_characters', writing.dialogue.narrationCharacters, '');
+    row(id, name, 'writing_dialogue', '', 'dialogue_ratio_percent', reportNumber(writing.dialogue.dialogueRatio * 100, 1), '');
+    row(id, name, 'writing_dialogue', '', 'said_count', writing.dialogue.said, '');
+    row(id, name, 'writing_dialogue', '', 'said_bookisms', writing.dialogue.saidBookisms.count, '');
+    row(id, name, 'writing_dialogue', '', 'adverb_tags', writing.dialogue.adverbTags.count, '');
+
+    for (const entry of writing.synonyms) {
+      row(id, name, 'writing_synonym', entry.word, 'suggestions', entry.suggestions.join(', '), `${entry.count} occurrences`);
+    }
+    writing.notes.forEach((note, noteIndex) => {
+      row(id, name, 'writing_note', `note-${noteIndex + 1}`, 'text', note, '');
     });
 
     const c2pa = item.c2paResult;

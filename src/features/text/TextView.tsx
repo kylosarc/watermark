@@ -13,6 +13,7 @@ import {
   Fingerprint,
   Info,
   Loader2,
+  PenLine,
   Play,
   RefreshCw,
   ShieldCheck,
@@ -44,6 +45,7 @@ import {
 } from '../../lib/textExport';
 import type { NgramEntry } from '../../lib/ngrams';
 import { UnicodeDetailPanel } from './UnicodePanel';
+import { WritingPanel } from './WritingPanel';
 import { ProviderStatusPanel } from './ProviderStatusPanel';
 import { sha256Hex } from '../../lib/file';
 import {
@@ -104,7 +106,7 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
   }, [textSimResults]);
 
   // Sub-tab for detail panel
-  type TextSubTab = 'analysis' | 'nlp' | 'unicode' | 'providers' | 'transform';
+  type TextSubTab = 'analysis' | 'nlp' | 'writing' | 'unicode' | 'providers' | 'transform';
   const [subTab, setSubTab] = useState<TextSubTab>('analysis');
 
   // Persistence: save text items when they change
@@ -651,6 +653,14 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
                             <BookOpen size={13} /> NLP
                           </button>
                           <button
+                            className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'writing' ? 'active' : ''}`}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('writing'); }}
+                            title="Writing analysis: POV, clichés, echoes, tics, frequencies and figurative-language candidates"
+                          >
+                            <PenLine size={13} /> Writing
+                          </button>
+                          <button
                             className={`txt-batch-item-btn ${selectedId === it.id && subTab === 'unicode' ? 'active' : ''}`}
                             type="button"
                             onClick={(e) => { e.stopPropagation(); setSelectedId(it.id); setSubTab('unicode'); }}
@@ -707,6 +717,13 @@ export function TextView({ showToast }: { showToast: (msg: string) => void }) {
                 />
               ) : subTab === 'nlp' ? (
                 <NlpDetailPanel item={selectedItem} showToast={showToast} />
+              ) : subTab === 'writing' ? (
+                <WritingPanel
+                  item={selectedItem}
+                  onOptionsChange={(options) => setItems((prev) => prev.map((it) => (
+                    it.id === selectedItem.id ? { ...it, ...options } : it
+                  )))}
+                />
               ) : subTab === 'unicode' ? (
                 <UnicodeDetailPanel
                   item={selectedItem}

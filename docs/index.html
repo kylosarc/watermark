@@ -810,7 +810,7 @@
       <section class="section" id="text-analysis">
         <div class="section-icon tertiary"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg></div>
         <h2>Text Analysis</h2>
-        <p class="subtitle">Multi-file text analysis with AI detection, readability metrics, and text simulation.</p>
+        <p class="subtitle">Multi-file text analysis, writing diagnostics, AI detection, readability metrics, and text simulation.</p>
 
         <div class="feature-grid">
           <div class="feature-card">
@@ -826,12 +826,32 @@
             <p>Sentence uniformity, burstiness, vocabulary richness, top words, and character/word/sentence counts.</p>
           </div>
           <div class="feature-card">
+            <h3>POV &amp; Dialogue</h3>
+            <p>Pick first, second, third person or auto-detect, exclude quoted dialogue, and list narration sentences that leave the expected POV. Also reports dialogue share, said-bookisms, and adverb tags.</p>
+          </div>
+          <div class="feature-card">
+            <h3>Tics &amp; Clichés</h3>
+            <p>Flags crutch words, filter words, hedges, intensifiers, emotion telling, body/reaction clichés, redundancies, weasel words, and a built-in cliché list.</p>
+          </div>
+          <div class="feature-card">
+            <h3>Frequency &amp; Alternatives</h3>
+            <p>Full single-word frequency with per-1,000 rates, common-word toggle, search, and a small offline synonym list for repeated content words.</p>
+          </div>
+          <div class="feature-card">
+            <h3>Echoes &amp; Rhythm</h3>
+            <p>Nearby word echoes within 75 words, repeated sentence openers, conjunction starts, and short/medium/long sentence distribution.</p>
+          </div>
+          <div class="feature-card">
+            <h3>Figurative &amp; Readability</h3>
+            <p>Counts simile and metaphor candidates without claiming interpretation, plus Flesch, Flesch–Kincaid, Gunning Fog, adverbs, and nominalisations.</p>
+          </div>
+          <div class="feature-card">
             <h3>Text Simulator</h3>
             <p>16 text transformations (line endings, Unicode, BOM, truncation) to test hash preservation.</p>
           </div>
           <div class="feature-card">
             <h3>Complete Report Export</h3>
-            <p>Export the selected file or the whole batch as a flat <code>.txt</code> report or a tidy one-row-per-data-point CSV, including every n-gram, Unicode occurrence, NLP result, and C2PA summary. The selected file is the default scope.</p>
+            <p>Export the selected file or the whole batch as a flat <code>.txt</code> report or a tidy one-row-per-data-point CSV, including every n-gram, writing finding, Unicode occurrence, NLP result, and C2PA summary. The selected file is the default scope.</p>
           </div>
         </div>
       </section>

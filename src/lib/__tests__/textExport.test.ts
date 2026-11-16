@@ -4,6 +4,7 @@ import {
   TEXT_REPORT_SCHEMA,
   buildCompleteTextReport,
   buildCompleteTextReportCSV,
+  buildTextAnalysisExport,
 } from '../textExport';
 
 const TEXT =
@@ -59,6 +60,10 @@ describe('buildCompleteTextReport', () => {
     expect(report).toContain('[Part-of-speech distribution]');
     expect(report).toContain('PERSON: Alice');
     expect(report).toContain('[Sentence sentiment]');
+    expect(report).toContain('[Writing: POV]');
+    expect(report).toContain('[Writing: word frequency]');
+    expect(report).toContain('[Writing: readability]');
+    expect(report).toContain('[Writing: echoes]');
     expect(report).toContain('[C2PA]');
     expect(report).toContain('status: not-run');
     expect(report).toContain('[Limitations]');
@@ -99,6 +104,21 @@ describe('buildCompleteTextReportCSV', () => {
     expect(csv).toContain('"nlp_entity","entity-1","type","PERSON"');
     expect(csv).toContain('"nlp_sentence_sentiment","sentence-3","sentiment"');
     expect(csv).toContain('"c2pa","","status","not-run"');
+    expect(csv).toContain('"writing_pov","","detected"');
+    expect(csv).toContain('"writing_readability","","flesch_kincaid_grade"');
+    expect(csv).toContain('"word_frequency","model","count"');
+    expect(csv).toContain('"writing_dialogue","","dialogue_ratio_percent"');
+  });
+
+  it('includes the writing object and honours the selected POV in JSON', () => {
+    const report = buildTextAnalysisExport([makeItem({ writingPov: 'first' })]);
+    const items = report.items as Array<Record<string, unknown>>;
+    const writing = items[0].writing as Record<string, unknown>;
+    const pov = writing.pov as Record<string, unknown>;
+
+    expect(pov.choice).toBe('first');
+    expect(Array.isArray(writing.frequencies)).toBe(true);
+    expect(writing.cliches).toBeDefined();
   });
 
   it('keeps multiple files distinguishable by id and name', () => {

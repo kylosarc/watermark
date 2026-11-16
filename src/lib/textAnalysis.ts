@@ -6,6 +6,7 @@
  * checks (Unicode, hashes, C2PA) are kept separate from it.
  */
 import type { VerificationResult } from './types';
+import type { PovChoice } from './writingAnalysis';
 import { STOP_WORDS } from './stopwords';
 import { analyzeNgrams, emptyNgramAnalysis, type NgramAnalysis } from './ngrams';
 import {
@@ -60,6 +61,10 @@ export interface TextItem {
   analysis: TextAnalysis | null;
   status: 'pending' | 'analyzing' | 'done' | 'error';
   format?: string;
+  /** Writer-chosen POV for the writing scan. Defaults to auto-detect. */
+  writingPov?: PovChoice;
+  /** Exclude quoted dialogue from POV counts. Defaults to true. */
+  writingIgnoreDialogue?: boolean;
 }
 
 export function createEmptyAnalysis(): TextAnalysis {

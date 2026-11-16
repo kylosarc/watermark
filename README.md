@@ -158,6 +158,20 @@ The project rule is simple: **everything should be falsifiable**. If a result ca
 * Explore common scenarios such as screenshots, email, and social-media processing
 * Experiment with trust policies
 
+### ✍️ Analyze Writing
+
+* Choose a POV (first, second, third) or auto-detect it, then scan narration for sentences that leave it
+* Count every word with per-1,000-word rates; filter common words or search the full list
+* Surface nearby word echoes, repeated sentence openers, and sentence-length rhythm
+* Flag crutch/filler words, filter words, hedges, intensifiers, emotion telling, body/reaction clichés, redundancies, and weasel words
+* Match clichés against a built-in list and count simile/metaphor candidates without pretending to interpret them
+* Suggest offline alternatives for repeated content words
+* Estimate Flesch Reading Ease, Flesch–Kincaid, and Gunning Fog; count adverbs, nominalisations, dialogue share, said-bookisms, and adverb tags
+* Export all writing findings in the complete TXT/CSV report
+
+Writing findings are revision prompts, not verdicts. The lexicons are local and
+source-visible; no draft is sent to a thesaurus or language service.
+
 ### 🛠️ Work With Your Files
 
 * Edit selected metadata
@@ -273,6 +287,7 @@ src/
 │   ├── ngrams.ts        Word-pair and 3–6 word phrase counting
 │   ├── textForensics.ts Hidden-Unicode scan and selective cleanup
 │   ├── textExport.ts    Full JSON, complete TXT/CSV report, summary/phrase/NLP CSVs
+│   ├── writingAnalysis.ts POV, tics, clichés, echoes, frequency, readability
 │   ├── providers.ts     Cited provider status and cleanup-layer model
 │   ├── extract.ts       Text extraction (PDF, PPTX, DOCX, jschardet)
 │   ├── file.ts          Hashing (SHA-256, SHA-1, MD5), format detection
@@ -287,7 +302,7 @@ src/
     ├── provenance/      DiffView, LineageView, ProvenanceGraph, EvidencePanel
     ├── simulator/       SimulatorView (What Would Break? + Survival Matrix)
     ├── playground/      PlaygroundView (Trust Policy rules)
-    ├── text/            TextView, UnicodePanel, ProviderStatusPanel, TextTransformPanel
+    ├── text/            TextView, WritingPanel, UnicodePanel, ProviderStatusPanel
     └── batch/           BatchView (multi-file verification + pattern summary)
 ```
 
@@ -303,6 +318,9 @@ src/
 - The unsloper is designed for prose and may not work on code or technical docs
 - Hidden Unicode characters are not proof of AI; word processors and chat apps insert them too
 - The style score is an experimental heuristic, not a watermark detector or authorship test
+- Writing findings (POV shifts, echoes, clichés, tics, simile/metaphor candidates) are pattern heuristics, not editorial verdicts
+- The offline synonym list is small and context-blind; it is not a thesaurus
+- Dialogue quote detection does not parse attributions or speaker turns
 - Claude and SynthID text watermarks cannot be verified locally by any public tool
 
 ### Video and media limitations
@@ -314,6 +332,12 @@ src/
 ### Your files are safe
 
 **Original documents and media are never overwritten.** All processing happens in memory. Your source files remain completely untouched on disk.
+
+### Security
+
+Dependency audits run in CI, Dependabot checks npm and GitHub Actions weekly, and
+the default path makes no network requests. See [`SECURITY.md`](SECURITY.md) for
+reporting and scope.
 
 ## Verification boundaries
 
@@ -328,6 +352,14 @@ Near-term work, ordered by how much it strengthens the evidence:
 - **Accessibility pass** — keyboard navigation, focus order, contrast, and screen-reader labels across the inspector and tool views.
 - **Bundle budget** — keep the C2PA WASM, wink model, and main bundle from growing silently; fail CI on unexplained size regressions.
 - **Opt-in public-URL inspection** — explicit, labeled, public URLs only; never uploads, never permission-granting, never part of the default path.
+
+Writing-focused follow-ups:
+
+- **Tense consistency** — let a writer pick past/present and flag candidate shifts, excluding dialogue.
+- **Dialogue attribution parser** — speaker turns, unattributed stretches, and tag density beyond the current word-level heuristics.
+- **Show-vs-tell prompts** — sentence-level revision prompts for emotion labels, filter verbs, and summary narration, with the full context always visible.
+- **Custom lexicons** — import/export a project-specific list of character names, world terms, crutches, and preferred spellings.
+- **Draft comparison** — compare two drafts' frequencies, echoes, rhythm, and POV counts without merging their text.
 
 ## References
 
