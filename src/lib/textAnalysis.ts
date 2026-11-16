@@ -288,9 +288,37 @@ export function analyzeText(text: string): TextAnalysis {
     'boasts a vibrant', 'rich', 'profound', 'enhancing', 'showcasing',
     'exemplifies commitment to', 'natural beauty', 'nestled in the heart of',
     'groundbreaking', 'renowned', 'featuring diverse array',
+    // Contractions and common variants
+    "it's important to note", "it's worth noting", "it's essential to",
+    "it's crucial to", "in today's fast-paced", "today's fast-paced world",
+    'in an ever-evolving', 'in the ever-evolving', 'ever-evolving landscape',
+    'navigating the complexities', 'navigate the complexities',
+    'unlock the full potential', 'unlock the potential', 'unlock the power',
+    'a testament to', 'serves as a testament', 'stands as a testament',
+    'a rich tapestry', 'rich tapestry of', 'a myriad of', 'a plethora of',
+    'when it comes to', 'the fact that', 'a wide range of', 'a broad range of',
+    'at the forefront of', 'embark on a journey', 'embark on a new chapter',
+    'navigating the landscape', 'the landscape of', 'the world of',
+    'from a broader perspective', 'one might argue', 'it could be argued',
+    'this underscores', 'this highlights', 'this demonstrates',
+    'plays a vital role', 'plays a pivotal role', 'plays a significant role',
+    'seamless integration', 'seamlessly integrate', 'seamlessly blend',
+    'harness the power', 'leverage the power', 'foster collaboration',
+    'foster innovation', 'drive innovation', 'drive growth',
+    'transformative potential', 'revolutionize the way', 'game-changing',
+    'cutting-edge technology', 'state-of-the-art', 'next-generation',
+    'dynamic environment', 'vibrant community', 'profound impact',
+    'intricate details', 'meticulous attention', 'nuanced understanding',
+    'compelling narrative', 'captivating audience', 'breathtaking views',
+    'elevate the experience', 'curated experience', 'bespoke solution',
+    'tailored approach', 'robust framework', 'holistic approach',
+    'paradigm shift', 'synergistic', 'multifaceted', 'ever-growing',
+    'ever-expanding', 'rapidly changing', 'constantly evolving',
+    'in conclusion', 'to sum up', 'in summary', 'ultimately',
   ];
+  const uniqueAiPhrases = [...new Set(aiPhrases)];
   const lowerText = text.toLowerCase();
-  const foundPhrases = aiPhrases.filter((p) => lowerText.includes(p));
+  const foundPhrases = uniqueAiPhrases.filter((p) => lowerText.includes(p));
   if (foundPhrases.length > 0) {
     aiSignals.push(
       `AI-typical phrases found: "${foundPhrases.slice(0, 3).join('", "')}"${
