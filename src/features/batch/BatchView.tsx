@@ -9,6 +9,7 @@ import {
 import { verifyFile } from '../../lib/c2pa';
 import { errorResult } from '../../lib/verification';
 import { computeCrossFilePatterns, patternsExport, type PatternCount } from '../../lib/batchPatterns';
+import { dedupeBatchItems, withoutCachedCopies } from '../../lib/batchItems';
 import { formatBytes } from '../../lib/file';
 import type { VerificationResult, VerificationStatus, ValidationState } from '../../lib/types';
 import { storeMediaBatch, getStoredMediaBatch } from '../../lib/persist';
@@ -88,21 +89,21 @@ export function BatchView({ showToast }: { showToast: (msg: string) => void }) {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Persistence: save media batch items
+  // Persistence: save media batch items, including an explicit empty state.
   useEffect(() => {
-    if (items.length > 0) {
-      storeMediaBatch(items.map((it) => ({
-        id: it.id,
-        fileName: it.fileName,
-        fileSize: it.fileSize,
-        mimeType: it.mimeType,
-        sha256: it.result?.sha256 ?? '',
-        status: it.status,
-        validationState: it.result?.validationState ?? null,
-        manifestCount: it.result?.manifestCount ?? 0,
-        signedAt: it.result?.manifests?.[0]?.signedAt ?? null,
-      })));
-    }
+    storeMediaBatch(items.map((it) => ({
+      id: it.id,
+      fileName: it.fileName,
+      fileSize: it.fileSize,
+      mimeType: it.mimeType,
+      sha256: it.result?.sha256 ?? '',
+      status: it.status,
+      validationState: it.result?.validationState ?? null,
+      manifestCount: it.result?.manifestCount ?? 0,
+      signedAt: it.result?.manifests?.find((m) => m.isActive)?.signedAt
+        ?? it.result?.manifests?.[0]?.signedAt
+        ?? null,
+    })));
   }, [items]);
 
   async function processFiles(files: FileList | File[]) {
@@ -119,7 +120,8 @@ export function BatchView({ showToast }: { showToast: (msg: string) => void }) {
       status: 'verifying' as const,
     }));
 
-    setItems((prev) => [...prev, ...newItems]);
+    // Re-uploading a path replaces its cached row rather than adding beside it.
+    setItems((prev) => [...withoutCachedCopies(prev, newItems), ...newItems]);
 
     // Process in parallel batches of 4
     const BATCH_SIZE = 4;
@@ -131,18 +133,22 @@ export function BatchView({ showToast }: { showToast: (msg: string) => void }) {
         batch.map((file) => verifyFile(file))
       );
 
-      setItems((prev) =>
+      setItems((prev) => dedupeBatchItems(
         prev.map((item) => {
           const idx = batchItems.findIndex((b) => b.id === item.id);
-          if (idx === -1) return item;
+          if (idx === -1) return { ...item, sha256: item.result?.sha256 };
           const result = results[idx];
+          const nextResult = result.status === 'fulfilled'
+            ? result.value
+            : errorResult(item.fileName, item.fileSize, item.mimeType, '', result.reason);
           return {
             ...item,
-            result: result.status === 'fulfilled' ? result.value : errorResult(item.fileName, item.fileSize, item.mimeType, '', result.reason),
+            result: nextResult,
+            sha256: nextResult.sha256,
             status: 'done' as const,
           };
         })
-      );
+      ));
     }
 
     setIsProcessing(false);
@@ -166,6 +172,7 @@ export function BatchView({ showToast }: { showToast: (msg: string) => void }) {
 
   function clearResults() {
     setItems([]);
+    storeMediaBatch([]);
     showToast('Batch results cleared');
   }
 
